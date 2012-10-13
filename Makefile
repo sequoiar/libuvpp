@@ -138,7 +138,7 @@ bench: test/run-benchmarks$(E)
 #	test/run-benchmarks $(@:bench-%=%)
 
 clean: clean-platform
-	$(RM) -rf src/*.o *.a out test/run-tests$(E) test/run-benchmarks$(E)
+	$(RM) -rf src/*.o *.a out test/run-tests$(E) test/run-benchmarks$(E) test/echo-client-udt test/echo-server-udt
 
 distclean: distclean-platform
-	$(RM) -rf src/*.o *.a out test/run-tests$(E) test/run-benchmarks$(E)
+	$(RM) -rf src/*.o *.a out test/run-tests$(E) test/run-benchmarks$(E) test/echo-client-udt test/echo-server-udt
