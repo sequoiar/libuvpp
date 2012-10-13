@@ -13,6 +13,8 @@ http://nodejs.org/
  * Non-blocking named pipes
 
  * UDP
+ 
+ * UDT transport sockets
 
  * Timers
 
