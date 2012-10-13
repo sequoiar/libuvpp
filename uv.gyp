@@ -29,12 +29,13 @@
         'include',
         'include/uv-private',
         'src/',
+        'src/UDT4/src/',
       ],
       'direct_dependent_settings': {
         'include_dirs': [ 'include' ],
         'conditions': [
           ['OS=="linux"', {
-            'libraries': [ '-ldl' ],
+            'libraries': [ '-ldl', '-lstdc++', '-lpthread' ],
           }],
         ],
       },
@@ -49,6 +50,7 @@
         'include/uv.h',
         'include/uv-private/ngx-queue.h',
         'include/uv-private/tree.h',
+        'src/UDT4/src/udtc.h',
         'src/cares.c',
         'src/fs-poll.c',
         'src/uv-common.c',
@@ -117,6 +119,20 @@
         'src/ares/nameser.h',
         'src/ares/setup_once.h',
         'src/ares/windows_port.c',
+        'src/UDT4/src/api.cpp',
+        'src/UDT4/src/buffer.cpp',
+        'src/UDT4/src/cache.cpp',
+        'src/UDT4/src/ccc.cpp',
+        'src/UDT4/src/channel.cpp',
+        'src/UDT4/src/common.cpp',
+        'src/UDT4/src/udt_core.cpp',
+        'src/UDT4/src/epoll.cpp',
+        'src/UDT4/src/list.cpp',
+        'src/UDT4/src/md5.cpp',
+        'src/UDT4/src/packet.cpp',
+        'src/UDT4/src/queue.cpp',
+        'src/UDT4/src/udtc.cpp',
+        'src/UDT4/src/window.cpp',
       ],
       'conditions': [
         [ 'OS=="win"', {
@@ -127,6 +143,8 @@
             '_WIN32_WINNT=0x0600',
             'EIO_STACKSIZE=262144',
             '_GNU_SOURCE',
+            'EVPIPE_OSFD',
+	    'UDT_EXPORTS'
           ],
           'sources': [
             'include/uv-private/uv-win.h',
@@ -160,6 +178,7 @@
             'src/win/threadpool.c',
             'src/win/timer.c',
             'src/win/udp.c',
+            'src/win/udt.c',
             'src/win/util.c',
             'src/win/winapi.c',
             'src/win/winapi.h',
@@ -170,17 +189,25 @@
             'libraries': [
               '-lws2_32.lib',
               '-lpsapi.lib',
-              '-liphlpapi.lib'
+              '-liphlpapi.lib',
+              '-lwsock32.lib'
             ],
           },
         }, { # Not Windows i.e. POSIX
           'cflags': [
             '-g',
-            '--std=gnu89',
+            '--std=gnu99',
             '-pedantic',
             '-Wall',
             '-Wextra',
             '-Wno-unused-parameter'
+            '-finline-functions',
+            '-fno-strict-aliasing',
+            '-fvisibility=hidden',
+            '-DLINUX',
+            '-DEVPIPE_OSFD',
+            '-frtti',
+            '-fexceptions',
           ],
           'sources': [
             'include/uv-private/eio.h',
@@ -212,9 +239,14 @@
             'src/unix/udp.c',
             'src/unix/uv-eio.c',
             'src/unix/uv-eio.h',
+            'src/unix/udt.c',
           ],
           'include_dirs': [ 'src/unix/ev', ],
-          'libraries': [ '-lm' ]
+          'libraries': [
+            '-lm',
+            '-lstdc++',
+            '-lpthread',
+          ]
         }],
         [ 'OS=="mac"', {
           'include_dirs': [ 'src/ares/config_darwin' ],
@@ -377,7 +409,7 @@
             'test/runner-win.c',
             'test/runner-win.h'
           ],
-          'libraries': [ 'ws2_32.lib' ]
+          'libraries': [ 'ws2_32.lib', 'wsock32.lib' ]
         }, { # POSIX
           'defines': [ '_GNU_SOURCE' ],
           'sources': [
@@ -391,6 +423,64 @@
             '_XOPEN_SOURCE=500',
           ],
         }],
+      ],
+      'msvs-settings': {
+        'VCLinkerTool': {
+          'SubSystem': 1, # /subsystem:console
+        },
+      },
+    },
+
+    {
+      'target_name': 'echo-server-udt',
+      'type': 'executable',
+      'dependencies': [ 'uv' ],
+      'sources': [
+        'test/echo-server-udt.c',
+        'test/runner.h',
+        'test/task.h',
+	  ],
+      'conditions': [
+        [ 'OS=="win"', {
+          'sources': [
+            'test/runner-win.h',
+          ],
+          'libraries': [ 'ws2_32.lib', 'wsock32.lib' ]
+        }, { # POSIX
+          'defines': [ '_GNU_SOURCE' ],
+          'sources': [
+            'test/runner-unix.h',
+          ]
+        }]
+      ],
+      'msvs-settings': {
+        'VCLinkerTool': {
+          'SubSystem': 1, # /subsystem:console
+        },
+      },
+	},
+
+	{
+      'target_name': 'echo-client-udt',
+      'type': 'executable',
+      'dependencies': [ 'uv' ],
+      'sources': [
+        'test/echo-client-udt.c',
+        'test/runner.h',
+        'test/task.h',
+	  ],
+      'conditions': [
+        [ 'OS=="win"', {
+          'sources': [
+            'test/runner-win.h',
+          ],
+          'libraries': [ 'ws2_32.lib', 'wsock32.lib' ]
+        }, { # POSIX
+          'defines': [ '_GNU_SOURCE' ],
+          'sources': [
+            'test/runner-unix.h',
+          ]
+        }]
       ],
       'msvs-settings': {
         'VCLinkerTool': {
@@ -432,7 +522,7 @@
             'test/runner-win.c',
             'test/runner-win.h',
           ],
-          'libraries': [ 'ws2_32.lib' ]
+          'libraries': [ 'ws2_32.lib', 'wsock32.lib' ]
         }, { # POSIX
           'defines': [ '_GNU_SOURCE' ],
           'sources': [

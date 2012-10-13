@@ -99,6 +99,7 @@ typedef void (*uv__io_cb)(struct uv_loop_s* loop, uv__io_t* handle, int events);
 
 struct uv__io_s {
   ev_io io_watcher;
+  void * pri; // place handle pointer here by tom zhou
 };
 
 #define UV_REQ_TYPE_PRIVATE /* empty */

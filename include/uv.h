@@ -59,8 +59,10 @@ extern "C" {
 
 #if defined(__unix__) || defined(__POSIX__) || defined(__APPLE__)
 # include "uv-private/uv-unix.h"
+typedef int uv_syssocket_t;
 #else
 # include "uv-private/uv-win.h"
+typedef SOCKET uv_syssocket_t;
 #endif
 
 /* Expand this list if necessary. */
@@ -146,6 +148,7 @@ typedef enum {
   XX(TIMER, timer)              \
   XX(TTY, tty)                  \
   XX(UDP, udp)                  \
+  XX(UDT, udt)                  \
 
 #define UV_REQ_TYPE_MAP(XX)     \
   XX(CONNECT, connect)          \
@@ -183,6 +186,7 @@ typedef struct uv_err_s uv_err_t;
 typedef struct uv_handle_s uv_handle_t;
 typedef struct uv_stream_s uv_stream_t;
 typedef struct uv_tcp_s uv_tcp_t;
+typedef struct uv_udt_s uv_udt_t;
 typedef struct uv_udp_s uv_udp_t;
 typedef struct uv_pipe_s uv_pipe_t;
 typedef struct uv_tty_s uv_tty_t;
@@ -629,6 +633,70 @@ struct uv_connect_s {
   uv_stream_t* handle;
   UV_CONNECT_PRIVATE_FIELDS
 };
+
+
+/*
+ * uv_udt_t is a subclass of uv_stream_t
+ *
+ * Represents a UDT stream or UDT server.
+ */
+
+#define UV_UDT_PRIVATE_FIELDS \
+    int udtfd; \
+    int accepted_udtfd;
+
+struct uv_udt_s {
+  UV_HANDLE_FIELDS
+  UV_STREAM_FIELDS
+  UV_TCP_PRIVATE_FIELDS
+  UV_UDT_PRIVATE_FIELDS
+};
+
+UV_EXTERN int uv_udt_init(uv_loop_t*, uv_udt_t* handle);
+
+/* Enable/disable Nagle's algorithm. */
+UV_EXTERN int uv_udt_nodelay(uv_udt_t* handle, int enable);
+
+/* Enable/disable TCP keep-alive.
+ *
+ * `ms` is the initial delay in seconds, ignored when `enable` is zero.
+ */
+UV_EXTERN int uv_udt_keepalive(uv_udt_t* handle, int enable,
+    unsigned int delay);
+
+/* Enable/disable UDT socket in rendezvous mode */
+UV_EXTERN int uv_udt_setrendez(uv_udt_t* handle, int enable);
+
+/*
+ * This setting applies to Windows only.
+ * Enable/disable simultaneous asynchronous accept requests that are
+ * queued by the operating system when listening for new tcp connections.
+ * This setting is used to tune a tcp server for the desired performance.
+ * Having simultaneous accepts can significantly improve the rate of
+ * accepting connections (which is why it is enabled by default).
+ */
+UV_EXTERN int uv_udt_simultaneous_accepts(uv_udt_t* handle, int enable);
+
+UV_EXTERN int uv_udt_bind(uv_udt_t* handle, struct sockaddr_in);
+UV_EXTERN int uv_udt_bind6(uv_udt_t* handle, struct sockaddr_in6);
+UV_EXTERN int uv_udt_getsockname(uv_udt_t* handle, struct sockaddr* name,
+    int* namelen);
+UV_EXTERN int uv_udt_getpeername(uv_udt_t* handle, struct sockaddr* name,
+    int* namelen);
+
+/* binding udt socket on existing udp socket/fd */
+UV_EXTERN int uv_udt_bindfd(uv_udt_t* handle, uv_syssocket_t udpfd);
+
+/*
+ * uv_udt_connect, uv_udt_connect6
+ * These functions establish IPv4 and IPv6 UDT connections. Provide an
+ * initialized UDT handle and an uninitialized uv_connect_t*. The callback
+ * will be made when the connection is established.
+ */
+UV_EXTERN int uv_udt_connect(uv_connect_t* req, uv_udt_t* handle,
+    struct sockaddr_in address, uv_connect_cb cb);
+UV_EXTERN int uv_udt_connect6(uv_connect_t* req, uv_udt_t* handle,
+    struct sockaddr_in6 address, uv_connect_cb cb);
 
 
 /*
@@ -1721,6 +1789,7 @@ UV_EXTERN int uv_thread_join(uv_thread_t *tid);
 /* the presence of these unions force similar struct layout */
 union uv_any_handle {
   uv_tcp_t tcp;
+  uv_udt_t udt;
   uv_pipe_t pipe;
   uv_prepare_t prepare;
   uv_check_t check;
@@ -1759,6 +1828,7 @@ struct uv_counters_s {
   uint64_t timer_init;
   uint64_t tty_init;
   uint64_t udp_init;
+  uint64_t udt_init;
 };
 
 
@@ -1790,6 +1860,7 @@ struct uv_loop_s {
 #undef UV_REQ_PRIVATE_FIELDS
 #undef UV_STREAM_PRIVATE_FIELDS
 #undef UV_TCP_PRIVATE_FIELDS
+#undef UV_UDT_PRIVATE_FIELDS
 #undef UV_PREPARE_PRIVATE_FIELDS
 #undef UV_CHECK_PRIVATE_FIELDS
 #undef UV_IDLE_PRIVATE_FIELDS

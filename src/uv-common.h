@@ -70,8 +70,14 @@ int uv__set_artificial_error(uv_loop_t* loop, uv_err_code code);
 uv_err_t uv__new_sys_error(int sys_error);
 uv_err_t uv__new_artificial_error(uv_err_code code);
 
+int uv_translate_udt_error();
+
 int uv__tcp_bind(uv_tcp_t* handle, struct sockaddr_in addr);
 int uv__tcp_bind6(uv_tcp_t* handle, struct sockaddr_in6 addr);
+
+int uv__udt_bind(uv_udt_t* handle, struct sockaddr_in addr);
+int uv__udt_bind6(uv_udt_t* handle, struct sockaddr_in6 addr);
+int uv__udt_bindfd(uv_udt_t* handle, uv_syssocket_t udpfd);
 
 int uv__udp_bind(uv_udp_t* handle, struct sockaddr_in addr, unsigned flags);
 int uv__udp_bind6(uv_udp_t* handle, struct sockaddr_in6 addr, unsigned flags);
@@ -83,6 +89,16 @@ int uv__tcp_connect(uv_connect_t* req,
 
 int uv__tcp_connect6(uv_connect_t* req,
                     uv_tcp_t* handle,
+                    struct sockaddr_in6 address,
+                    uv_connect_cb cb);
+
+int uv__udt_connect(uv_connect_t* req,
+                   uv_udt_t* handle,
+                   struct sockaddr_in address,
+                   uv_connect_cb cb);
+
+int uv__udt_connect6(uv_connect_t* req,
+                    uv_udt_t* handle,
                     struct sockaddr_in6 address,
                     uv_connect_cb cb);
 

@@ -46,7 +46,8 @@
 typedef enum {
   TCP = 0,
   UDP,
-  PIPE
+  PIPE,
+  UDT
 } stream_type;
 
 /* Log to stderr. */

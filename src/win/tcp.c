@@ -97,7 +97,7 @@ static int uv_tcp_set_socket(uv_loop_t* loop, uv_tcp_t* handle,
   /* Use uv_handle_t pointer as completion key. */
   if (CreateIoCompletionPort((HANDLE)socket,
                              loop->iocp,
-                             (ULONG_PTR)socket,
+                             (ULONG_PTR)handle,
                              0) == NULL) {
     if (imported) {
       handle->flags |= UV_HANDLE_EMULATE_IOCP;

@@ -24,7 +24,7 @@ ifdef MSVC
 uname_S := MINGW
 endif
 
-CPPFLAGS += -Iinclude -Iinclude/uv-private
+CPPFLAGS += -Iinclude -Iinclude/uv-private -Isrc/UDT4/src -DLINUX -DEVPIPE_OSFD
 
 CARES_OBJS =
 CARES_OBJS += src/ares/ares__close_sockets.o
@@ -71,6 +71,22 @@ CARES_OBJS += src/ares/bitncmp.o
 CARES_OBJS += src/ares/inet_net_pton.o
 CARES_OBJS += src/ares/inet_ntop.o
 
+UDT_OBJS =
+UDT_OBJS += src/UDT4/src/api.o
+UDT_OBJS += src/UDT4/src/buffer.o
+UDT_OBJS += src/UDT4/src/cache.o
+UDT_OBJS += src/UDT4/src/ccc.o
+UDT_OBJS += src/UDT4/src/channel.o
+UDT_OBJS += src/UDT4/src/common.o
+UDT_OBJS += src/UDT4/src/core.o
+UDT_OBJS += src/UDT4/src/epoll.o
+UDT_OBJS += src/UDT4/src/list.o
+UDT_OBJS += src/UDT4/src/md5.o
+UDT_OBJS += src/UDT4/src/packet.o
+UDT_OBJS += src/UDT4/src/queue.o
+UDT_OBJS += src/UDT4/src/udtc.o
+UDT_OBJS += src/UDT4/src/window.o
+
 ifneq (,$(findstring MINGW,$(uname_S)))
 include config-mingw.mk
 else
@@ -80,10 +96,19 @@ endif
 TESTS=test/blackhole-server.c test/echo-server.c test/test-*.c
 BENCHMARKS=test/blackhole-server.c test/echo-server.c test/dns-server.c test/benchmark-*.c
 
-all: uv.a
+all: uv.a test/run-benchmarks test/echo-server-udt test/echo-client-udt
 
 $(CARES_OBJS): %.o: %.c
 	$(CC) -o $*.o -c $(CFLAGS) $(CPPFLAGS) $< -DHAVE_CONFIG_H
+
+$(UDT_OBJS): %.o: %.cpp
+	$(CC) -o $*.o -c $(CFLAGS) $(CPPFLAGS) -DLINUX $< -DHAVE_CONFIG_H
+
+test/echo-server-udt: test/echo-server-udt.c uv.a
+	$(CC) $(CPPFLAGS) -o test/echo-server-udt test/echo-server-udt.c uv.a -lstdc++ -lpthread -lm -lrt
+
+test/echo-client-udt: test/echo-server-udt.c uv.a
+	$(CC) $(CPPFLAGS) -o test/echo-client-udt test/echo-client-udt.c uv.a -lstdc++ -lpthread -lm -lrt
 
 test/run-tests$(E): test/*.h test/run-tests.c $(RUNNER_SRC) test/runner-unix.c $(TESTS) uv.a
 	$(CC) $(CPPFLAGS) $(RUNNER_CFLAGS) -o test/run-tests test/run-tests.c \
@@ -113,7 +138,7 @@ bench: test/run-benchmarks$(E)
 #	test/run-benchmarks $(@:bench-%=%)
 
 clean: clean-platform
-	$(RM) -f src/*.o *.a test/run-tests$(E) test/run-benchmarks$(E)
+	$(RM) -rf src/*.o *.a out test/run-tests$(E) test/run-benchmarks$(E)
 
 distclean: distclean-platform
-	$(RM) -f src/*.o *.a test/run-tests$(E) test/run-benchmarks$(E)
+	$(RM) -rf src/*.o *.a out test/run-tests$(E) test/run-benchmarks$(E)

@@ -244,7 +244,9 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
   /* Counter to keep track of active tcp streams */                           \
   unsigned int active_tcp_streams;                                            \
   /* Counter to keep track of active udp streams */                           \
-  unsigned int active_udp_streams;
+  unsigned int active_udp_streams;                                            \
+  /* Counter to keep track of active udt streams */                           \
+  unsigned int active_udt_streams;                                            \
 
 #define UV_REQ_TYPE_PRIVATE               \
   /* TODO: remove the req suffix */       \
@@ -267,11 +269,19 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
   };                                      \
   struct uv_req_s* next_req;
 
+
+#define UV_REQ_BUFSML_SIZE (4)
+
 #define UV_WRITE_PRIVATE_FIELDS           \
   int ipc_header;                         \
   uv_buf_t write_buffer;                  \
   HANDLE event_handle;                    \
-  HANDLE wait_handle;
+  HANDLE wait_handle;                     \
+  int write_index;                        \
+  uv_buf_t* bufs;                         \
+  int bufcnt;                             \
+  int error;                              \
+  uv_buf_t bufsml[UV_REQ_BUFSML_SIZE];
 
 #define UV_CONNECT_PRIVATE_FIELDS         \
   /* empty */
@@ -292,6 +302,7 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
   typedef struct uv_tcp_accept_s {        \
     UV_REQ_FIELDS                         \
     SOCKET accept_socket;                 \
+    int accept_udtfd;                     \
     char accept_buffer[sizeof(struct sockaddr_storage) * 2 + 32]; \
     HANDLE event_handle;                  \
     HANDLE wait_handle;                   \

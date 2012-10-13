@@ -19,10 +19,10 @@
 # IN THE SOFTWARE.
 
 E=
-CSTDFLAG=--std=c89 -pedantic -Wall -Wextra -Wno-unused-parameter
-CFLAGS += -g
+CSTDFLAG=--std=c99 -pedantic -Wall -Wextra -Wno-unused-parameter
+CFLAGS += -g -finline-functions -fno-strict-aliasing -fvisibility=hidden 
 CPPFLAGS += -Isrc -Isrc/unix/ev
-LINKFLAGS=-lm
+LINKFLAGS=-lm -lstdc++ -lpthread 
 
 CPPFLAGS += -D_LARGEFILE_SOURCE
 CPPFLAGS += -D_FILE_OFFSET_BITS=64
@@ -43,6 +43,7 @@ OBJS += src/unix/thread.o
 OBJS += src/unix/timer.o
 OBJS += src/unix/tty.o
 OBJS += src/unix/udp.o
+OBJS += src/unix/udt.o
 
 ifeq (SunOS,$(uname_S))
 EV_CONFIG=config_sunos.h
@@ -131,7 +132,7 @@ endif
 RUNNER_LIBS=
 RUNNER_SRC=test/runner-unix.c
 
-uv.a: $(OBJS) src/cares.o src/fs-poll.o src/uv-common.o src/unix/ev/ev.o src/unix/uv-eio.o src/unix/eio/eio.o $(CARES_OBJS)
+uv.a: $(OBJS) src/cares.o src/fs-poll.o src/uv-common.o src/unix/ev/ev.o src/unix/uv-eio.o src/unix/eio/eio.o $(CARES_OBJS) $(UDT_OBJS) 
 	$(AR) rcs uv.a $^
 
 src/%.o: src/%.c include/uv.h include/uv-private/uv-unix.h
@@ -158,6 +159,7 @@ src/unix/uv-eio.o: src/unix/uv-eio.c
 
 clean-platform:
 	-rm -f src/ares/*.o
+	-rm -f src/UDT4/src/*.o
 	-rm -f src/unix/*.o
 	-rm -f src/unix/ev/*.o
 	-rm -f src/unix/eio/*.o
@@ -166,6 +168,7 @@ clean-platform:
 
 distclean-platform:
 	-rm -f src/ares/*.o
+	-rm -f src/UDT4/src/*.o
 	-rm -f src/unix/*.o
 	-rm -f src/unix/ev/*.o
 	-rm -f src/unix/eio/*.o

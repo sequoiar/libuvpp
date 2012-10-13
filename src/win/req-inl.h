@@ -113,6 +113,12 @@ INLINE static void uv_insert_pending_req(uv_loop_t* loop, uv_req_t* req) {
                                       req);                                   \
         break;                                                                \
                                                                               \
+      case UV_UDT:                                                            \
+        uv_process_udt_##method##_req(loop,                                   \
+                                      (uv_udt_t*) ((req)->handle_at),         \
+                                      req);                                   \
+        break;                                                                \
+                                                                              \
       case UV_NAMED_PIPE:                                                     \
         uv_process_pipe_##method##_req(loop,                                  \
                                        (uv_pipe_t*) ((req)->handle_at),       \
