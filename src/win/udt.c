@@ -1,23 +1,4 @@
-/* Copyright Joyent, Inc. and other Node contributors. All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- */
+// Copyright tom zhou<zs68j2ee@gmail.com>, 2012.
 
 #include <assert.h>
 
@@ -28,7 +9,7 @@
 #include "req-inl.h"
 #include "udtc.h" // udt head file
 
-#define UDT_DEBUG 1
+///#define UDT_DEBUG 1
 
 /*
  * Threshold of active udt streams for which to preallocate udt read buffers.
@@ -1500,26 +1481,26 @@ void uv_process_udt_read_req(uv_loop_t* loop, uv_udt_t* handle,
 			buf = handle->alloc_cb((uv_handle_t*) handle, 65536);
 			assert(buf.len > 0);
 
-			rcnt = 0;
-			while (rcnt < buf.len) {
-				bytes = udt_recv(handle->udtfd, buf.base+rcnt, buf.len-rcnt, 0);;
-				if (bytes > 0) {
+			bytes = 0;
+			while (bytes < buf.len) {
+				rcnt = udt_recv(handle->udtfd, buf.base+bytes, buf.len-bytes, 0);;
+				if (rcnt > 0) {
 #if 0
 					/* Successful read */
-					handle->read_cb((uv_stream_t*)handle, bytes, buf);
+					handle->read_cb((uv_stream_t*)handle, rcnt, buf);
 					/* Read again only if bytes == buf.len */
-					if (bytes < buf.len) {
+					if (rcnt < buf.len) {
 						break;
 					}
 #else
-					rcnt += bytes;
+					bytes += rcnt;
 #endif
 				} else {
 					err = uv_translate_udt_error();
 					if (err == WSAEWOULDBLOCK) {
 						/* Read buffer was completely empty, report a 0-byte read. */
-						if (rcnt == 0) uv__set_sys_error(loop, WSAEWOULDBLOCK);
-						handle->read_cb((uv_stream_t*)handle, rcnt, buf);
+						uv__set_sys_error(loop, WSAEWOULDBLOCK);
+						handle->read_cb((uv_stream_t*)handle, bytes, buf);
 					} else {
 						/* Ouch! serious error. */
 						handle->flags &= ~UV_HANDLE_READING;
