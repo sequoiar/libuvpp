@@ -103,8 +103,8 @@ static int uv__connect(uv_connect_t* req,
 
 #if 1
   r = udt_connect(((uv_udt_t *)handle)->udtfd, addr, addrlen);
-
-  if (r < 0) {
+  ///if (r < 0)
+  {
 	  // checking connecting state first
 	  if (UDT_CONNECTING == udt_getsockstate(((uv_udt_t *)handle)->udtfd)) {
 		  ; /* not an error */
