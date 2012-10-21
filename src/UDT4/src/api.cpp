@@ -212,6 +212,10 @@ m_iMuxID(-1)
 
 CUDTSocket::~CUDTSocket()
 {
+#ifdef EVPIPE_OSFD
+	char dummy;
+#endif
+
 	if (AF_INET == m_iIPversion)
 	{
 		delete (sockaddr_in*)m_pSelfAddr;
@@ -230,6 +234,9 @@ CUDTSocket::~CUDTSocket()
 	delete m_pAcceptSockets;
 
 #ifndef WIN32
+
+#ifdef EVPIPE_OSFD
+	while (recv(m_evPipe[0], &dummy, sizeof(dummy), 0) > 0);
 	// close event pipe
 	cout << "close evPipe fds:"
 		 << m_evPipe[0]
@@ -238,11 +245,15 @@ CUDTSocket::~CUDTSocket()
          << endl;
 	close(m_evPipe[0]);
 	close(m_evPipe[1]);
+#endif
 
 	pthread_mutex_destroy(&m_AcceptLock);
 	pthread_cond_destroy(&m_AcceptCond);
 	pthread_mutex_destroy(&m_ControlLock);
 #else
+
+#ifdef EVPIPE_OSFD
+	while (recv(m_evPipe[0], &dummy, sizeof(dummy), 0) > 0);
 	// close event pipe
 	cout << "close evPipe fds:"
 		 << m_evPipe[0]
@@ -251,6 +262,7 @@ CUDTSocket::~CUDTSocket()
          << endl;
 	closesocket(m_evPipe[0]);
 	closesocket(m_evPipe[1]);
+#endif
 
 	CloseHandle(m_AcceptLock);
 	CloseHandle(m_AcceptCond);
@@ -684,7 +696,9 @@ int CUDTUnited::feedOsfd(const UDTSOCKET u)
 	} else {
 		///cout << "feedOsfd of UDT@" << u << endl;
 		char dummy;
+#ifndef WIN32
 		recv(i->second->m_evPipe[0], &dummy, sizeof(dummy), 0);
+#endif
 		dummy = 0x68;
 		return send(i->second->m_evPipe[1], &dummy, sizeof(dummy), 0);
 	}
@@ -1026,6 +1040,11 @@ int CUDTUnited::close(const UDTSOCKET u)
 
    CGuard socket_cg(s->m_ControlLock);
 
+#ifdef EVPIPE_OSFD
+   // trigger event pipe to notify closing
+   feedOsfd(s->m_SocketID);
+#endif
+
    if (s->m_Status == LISTENING)
    {
       if (s->m_pUDT->m_bBroken)
@@ -1068,12 +1087,6 @@ int CUDTUnited::close(const UDTSOCKET u)
    m_ClosedSockets.insert(pair<UDTSOCKET, CUDTSocket*>(s->m_SocketID, s));
 
    CTimer::triggerEvent();
-
-#ifdef EVPIPE_OSFD
-   // trigger event pipe
-   // disable it to avoid error event deadlock, when close socket
-   ///feedOsfd(s->m_SocketID);
-#endif
 
    return 0;
 }

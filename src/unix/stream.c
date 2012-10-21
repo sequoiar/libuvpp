@@ -214,9 +214,6 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, int events) {
 		  if (udtfd < 0) {
 			  ///fprintf(stdout, "func:%s, line:%d, errno: %d, %s\n", __FUNCTION__, __LINE__, udt_getlasterror_code(), udt_getlasterror_desc());
 
-			  // consume Os fd event
-			  ///udt_consume_osfd(stream->fd);
-
 			  if (udt_getlasterror_code() == UDT_EASYNCRCV /*errno == EAGAIN || errno == EWOULDBLOCK*/) {
 				  /* No problem. */
 				  errno = EAGAIN;
@@ -233,6 +230,7 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, int events) {
 			  ((uv_udt_t *)stream)->accepted_udtfd = udtfd;
 			  // fill Os fd
 			  assert(udt_getsockopt(udtfd, 0, (int)UDT_UDT_OSFD, &stream->accepted_fd, &optlen) == 0);
+
 			  stream->connection_cb((uv_stream_t*)stream, 0);
 			  if (stream->accepted_fd >= 0) {
 				  /* The user hasn't yet accepted called uv_accept() */
@@ -296,6 +294,9 @@ int uv_accept(uv_stream_t* server, uv_stream_t* client) {
         UV_STREAM_READABLE | UV_STREAM_WRITABLE)) {
 	  /* TODO handle error */
 	  if (streamServer->type == UV_UDT) {
+		  // clear pending Os fd event
+		  udt_consume_osfd(((uv_udt_t *)streamServer)->accepted_fd);
+
 		  udt_close(((uv_udt_t *)streamServer)->accepted_udtfd);
 	  } else {
 		  close(streamServer->accepted_fd);
@@ -382,7 +383,11 @@ static void uv__drain(uv_stream_t* stream) {
 
     // UDT don't need drain
     if (stream->type == UV_UDT) {
+    	// clear pending Os fd event
+    	udt_consume_osfd(((uv_udt_t *)stream)->fd);
+
     	if (udt_close(((uv_udt_t *)stream)->udtfd)) {
+    		/* Error. Report it. User should call uv_close(). */
     		uv__set_sys_error(stream->loop, uv_translate_udt_error());
     		if (req->cb) {
     			req->cb(req, -1);
@@ -525,9 +530,6 @@ start:
 			  while (ilen < iov[it].iov_len) {
 				  int rc = udt_send(((uv_udt_t *)stream)->udtfd, ((char *)iov[it].iov_base)+ilen, iov[it].iov_len-ilen, 0);
 				  if (rc < 0) {
-					  // consume Os fd event
-					  ///udt_consume_osfd(stream->fd);
-
 					  next = 0;
 					  break;
 				  } else  {
@@ -712,8 +714,9 @@ static void uv__read(uv_stream_t* stream) {
     assert(buf.base);
     assert(stream->fd >= 0);
 
-    if (stream->read_cb) {
-    	if (stream->type == UV_UDT) {
+    // udt recv
+    if (stream->type == UV_UDT) {
+    	if (stream->read_cb) {
     		nread = udt_recv(((uv_udt_t *)stream)->udtfd, buf.base, buf.len, 0);
     		if (nread <= 0) {
     			// consume Os fd event
@@ -721,119 +724,200 @@ static void uv__read(uv_stream_t* stream) {
     		}
     		///fprintf(stdout, "func:%s, line:%d, expect rd: %d, real rd: %d\n", __FUNCTION__, __LINE__, buf.len, nread);
     	} else {
+    		// never support recvmsg on udt for now
+    		assert(0);
+    	}
+
+    	if (nread < 0) {
+    		/* Error */
+    		int udterr = uv_translate_udt_error();
+
+    		if (udterr == EAGAIN) {
+    			/* Wait for the next one. */
+    			if (stream->flags & UV_STREAM_READING) {
+    				uv__io_start(stream->loop, &stream->read_watcher);
+    			}
+    			uv__set_sys_error(stream->loop, EAGAIN);
+
+    			if (stream->read_cb) {
+    				stream->read_cb(stream, 0, buf);
+    			} else {
+    				// never go here
+    				assert(0);
+    			}
+
+    			return;
+    		} else if (0/*(udterr == ECONNABORTED) ||
+    				   (udterr == ENOTSOCK)*/) {
+                // socket broken as EOF
+
+        		/* EOF */
+        		uv__set_artificial_error(stream->loop, UV_EOF);
+        		uv__io_stop(stream->loop, &stream->read_watcher);
+        		if (!uv__io_active(&stream->write_watcher))
+        			uv__handle_stop(stream);
+
+        		if (stream->read_cb) {
+        			stream->read_cb(stream, -1, buf);
+        		} else {
+        			// never come here
+        			assert(0);
+        		}
+        		return;
+    		} else {
+    			/* Error. User should call uv_close(). */
+    			uv__set_sys_error(stream->loop, udterr);
+
+    			uv__io_stop(stream->loop, &stream->read_watcher);
+    			if (!uv__io_active(&stream->write_watcher))
+    			   uv__handle_stop(stream);
+
+    			if (stream->read_cb) {
+    				stream->read_cb(stream, -1, buf);
+    			} else {
+    				// never come here
+    				assert(0);
+    			}
+
+    			assert(!uv__io_active(&stream->read_watcher));
+    			return;
+    		}
+
+    	} else if (nread == 0) {
+    		// never go here
+    		assert(0);
+    		return;
+    	} else {
+    		/* Successful read */
+    		ssize_t buflen = buf.len;
+
+    		if (stream->read_cb) {
+    			stream->read_cb(stream, nread, buf);
+    		} else {
+    			// never support recvmsg on udt for now
+    			assert(0);
+    		}
+
+    		/* Return if we didn't fill the buffer, there is no more data to read. */
+    		if (nread < buflen) {
+    			return;
+    		}
+    	}
+    } else {
+    	if (stream->read_cb) {
     		do {
     			nread = read(stream->fd, buf.base, buf.len);
     		}
     		while (nread < 0 && errno == EINTR);
+    	} else {
+    		assert(stream->read2_cb);
+    		/* read2_cb uses recvmsg */
+    		msg.msg_flags = 0;
+    		msg.msg_iov = (struct iovec*) &buf;
+    		msg.msg_iovlen = 1;
+    		msg.msg_name = NULL;
+    		msg.msg_namelen = 0;
+    		/* Set up to receive a descriptor even if one isn't in the message */
+    		msg.msg_controllen = 64;
+    		msg.msg_control = (void *) cmsg_space;
+
+    		do {
+    			nread = recvmsg(stream->fd, &msg, 0);
+    		}
+    		while (nread < 0 && errno == EINTR);
     	}
-    } else {
-      assert(stream->read2_cb);
-      /* read2_cb uses recvmsg */
-      msg.msg_flags = 0;
-      msg.msg_iov = (struct iovec*) &buf;
-      msg.msg_iovlen = 1;
-      msg.msg_name = NULL;
-      msg.msg_namelen = 0;
-      /* Set up to receive a descriptor even if one isn't in the message */
-      msg.msg_controllen = 64;
-      msg.msg_control = (void *) cmsg_space;
-
-      do {
-        nread = recvmsg(stream->fd, &msg, 0);
-      }
-      while (nread < 0 && errno == EINTR);
-    }
 
 
-    if (nread < 0) {
-      /* Error */
-      if (((stream->type == UV_UDT) && (udt_getlasterror_code() == UDT_EASYNCRCV)) || (errno == EAGAIN || errno == EWOULDBLOCK)) {
-        /* Wait for the next one. */
-        if (stream->flags & UV_STREAM_READING) {
-          uv__io_start(stream->loop, &stream->read_watcher);
-        }
-        uv__set_sys_error(stream->loop, EAGAIN);
+    	if (nread < 0) {
+    		/* Error */
+    		if ((errno == EAGAIN || errno == EWOULDBLOCK)) {
+    			/* Wait for the next one. */
+    			if (stream->flags & UV_STREAM_READING) {
+    				uv__io_start(stream->loop, &stream->read_watcher);
+    			}
+    			uv__set_sys_error(stream->loop, EAGAIN);
 
-        if (stream->read_cb) {
-          stream->read_cb(stream, 0, buf);
-        } else {
-          stream->read2_cb((uv_pipe_t*)stream, 0, buf, UV_UNKNOWN_HANDLE);
-        }
+    			if (stream->read_cb) {
+    				stream->read_cb(stream, 0, buf);
+    			} else {
+    				stream->read2_cb((uv_pipe_t*)stream, 0, buf, UV_UNKNOWN_HANDLE);
+    			}
 
-        return;
-      } else {
-        /* Error. User should call uv_close(). */
-        uv__set_sys_error(stream->loop, (stream->type == UV_UDT) ? uv_translate_udt_error() : errno);
+    			return;
+    		} else {
+    			/* Error. User should call uv_close(). */
+    			uv__set_sys_error(stream->loop, errno);
 
-        if (stream->read_cb) {
-          stream->read_cb(stream, -1, buf);
-        } else {
-          stream->read2_cb((uv_pipe_t*)stream, -1, buf, UV_UNKNOWN_HANDLE);
-        }
+    			if (stream->read_cb) {
+    				stream->read_cb(stream, -1, buf);
+    			} else {
+    				stream->read2_cb((uv_pipe_t*)stream, -1, buf, UV_UNKNOWN_HANDLE);
+    			}
 
-        assert(!uv__io_active(&stream->read_watcher));
-        return;
-      }
+    			assert(!uv__io_active(&stream->read_watcher));
+    			return;
+    		}
 
-    } else if (nread == 0) {
-      /* EOF */
-      uv__set_artificial_error(stream->loop, UV_EOF);
-      uv__io_stop(stream->loop, &stream->read_watcher);
-      if (!uv__io_active(&stream->write_watcher))
-        uv__handle_stop(stream);
+    	} else if (nread == 0) {
+    		/* EOF */
+    		uv__set_artificial_error(stream->loop, UV_EOF);
+    		uv__io_stop(stream->loop, &stream->read_watcher);
+    		if (!uv__io_active(&stream->write_watcher))
+    			uv__handle_stop(stream);
 
-      if (stream->read_cb) {
-        stream->read_cb(stream, -1, buf);
-      } else {
-        stream->read2_cb((uv_pipe_t*)stream, -1, buf, UV_UNKNOWN_HANDLE);
-      }
-      return;
-    } else {
-      /* Successful read */
-      ssize_t buflen = buf.len;
+    		if (stream->read_cb) {
+    			stream->read_cb(stream, -1, buf);
+    		} else {
+    			stream->read2_cb((uv_pipe_t*)stream, -1, buf, UV_UNKNOWN_HANDLE);
+    		}
+    		return;
+    	} else {
+    		/* Successful read */
+    		ssize_t buflen = buf.len;
 
-      if (stream->read_cb) {
-        stream->read_cb(stream, nread, buf);
-      } else {
-        assert(stream->read2_cb);
+    		if (stream->read_cb) {
+    			stream->read_cb(stream, nread, buf);
+    		} else {
+    			assert(stream->read2_cb);
 
-        /*
-         * XXX: Some implementations can send multiple file descriptors in a
-         * single message. We should be using CMSG_NXTHDR() to walk the
-         * chain to get at them all. This would require changing the API to
-         * hand these back up the caller, is a pain.
-         */
+    			/*
+    			 * XXX: Some implementations can send multiple file descriptors in a
+    			 * single message. We should be using CMSG_NXTHDR() to walk the
+    			 * chain to get at them all. This would require changing the API to
+    			 * hand these back up the caller, is a pain.
+    			 */
 
-        for (cmsg = CMSG_FIRSTHDR(&msg);
-             msg.msg_controllen > 0 && cmsg != NULL;
-             cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+    			for (cmsg = CMSG_FIRSTHDR(&msg);
+    					msg.msg_controllen > 0 && cmsg != NULL;
+    					cmsg = CMSG_NXTHDR(&msg, cmsg)) {
 
-          if (cmsg->cmsg_type == SCM_RIGHTS) {
-            if (stream->accepted_fd != -1) {
-              fprintf(stderr, "(libuv) ignoring extra FD received\n");
-            }
+    				if (cmsg->cmsg_type == SCM_RIGHTS) {
+    					if (stream->accepted_fd != -1) {
+    						fprintf(stderr, "(libuv) ignoring extra FD received\n");
+    					}
 
-            stream->accepted_fd = *(int *) CMSG_DATA(cmsg);
+    					stream->accepted_fd = *(int *) CMSG_DATA(cmsg);
 
-          } else {
-            fprintf(stderr, "ignoring non-SCM_RIGHTS ancillary data: %d\n",
-                cmsg->cmsg_type);
-          }
-        }
+    				} else {
+    					fprintf(stderr, "ignoring non-SCM_RIGHTS ancillary data: %d\n",
+    							cmsg->cmsg_type);
+    				}
+    			}
 
 
-        if (stream->accepted_fd >= 0) {
-          stream->read2_cb((uv_pipe_t*)stream, nread, buf,
-              uv__handle_type(stream->accepted_fd));
-        } else {
-          stream->read2_cb((uv_pipe_t*)stream, nread, buf, UV_UNKNOWN_HANDLE);
-        }
-      }
+    			if (stream->accepted_fd >= 0) {
+    				stream->read2_cb((uv_pipe_t*)stream, nread, buf,
+    						uv__handle_type(stream->accepted_fd));
+    			} else {
+    				stream->read2_cb((uv_pipe_t*)stream, nread, buf, UV_UNKNOWN_HANDLE);
+    			}
+    		}
 
-      /* Return if we didn't fill the buffer, there is no more data to read. */
-      if (nread < buflen) {
-        return;
-      }
+    		/* Return if we didn't fill the buffer, there is no more data to read. */
+    		if (nread < buflen) {
+    			return;
+    		}
+    	}
     }
   }
 }

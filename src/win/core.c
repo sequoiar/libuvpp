@@ -36,7 +36,7 @@
 /* The only event loop we support right now */
 static uv_loop_t uv_default_loop_;
 
-/* uv_once intialization guards */
+/* uv_once initialization guards */
 static uv_once_t uv_init_guard_ = UV_ONCE_INIT;
 static uv_once_t uv_default_loop_init_guard_ = UV_ONCE_INIT;
 
@@ -279,8 +279,11 @@ static void uv_poll_ex(uv_loop_t* loop, int block) {
   }
 
 
+////////////////////////////////////////////////////////////////////////////////
+// !!! use uv_poll to avoid polling stuck with udt -
+// by tom zhou(zs68j2ee@gmail.com),2012.10.18.
 int uv_run_once(uv_loop_t* loop) {
-  if (pGetQueuedCompletionStatusEx) {
+  if (0/*pGetQueuedCompletionStatusEx*/) {
     UV_LOOP_ONCE(loop, uv_poll_ex);
   } else {
     UV_LOOP_ONCE(loop, uv_poll);
@@ -290,7 +293,7 @@ int uv_run_once(uv_loop_t* loop) {
 
 
 int uv_run(uv_loop_t* loop) {
-  if (pGetQueuedCompletionStatusEx) {
+  if (0/*pGetQueuedCompletionStatusEx*/) {
     UV_LOOP(loop, uv_poll_ex);
   } else {
     UV_LOOP(loop, uv_poll);
@@ -299,3 +302,4 @@ int uv_run(uv_loop_t* loop) {
   assert(!UV_LOOP_ALIVE((loop)));
   return 0;
 }
+////////////////////////////////////////////////////////////////////////////////////

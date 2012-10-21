@@ -189,6 +189,17 @@ struct uv__io_s {
 #define UV_TCP_PRIVATE_FIELDS
 
 
+/*
+ * uv_udt_t is a subclass of uv_stream_t
+ *
+ * Represents a UDT stream or UDT server.
+ */
+
+#define UV_UDT_PRIVATE_FIELDS \
+    int udtfd; \
+    int accepted_udtfd;
+
+
 /* UV_UDP */
 #define UV_UDP_PRIVATE_FIELDS         \
   int fd;                             \

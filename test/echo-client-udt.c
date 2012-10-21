@@ -81,15 +81,13 @@ static void buf_free(uv_buf_t uv_buf_t) {
 
 
 static void pinger_close_cb(uv_handle_t* handle) {
-#if 0
   pinger_t* pinger;
 
   pinger = (pinger_t*)handle->data;
   LOGF("ping_pongs: %d roundtrips/s\n", (1000 * pinger->pongs) / TIME);
 
   free(pinger);
-#endif
-  //printf("pinger_close_cb\n");
+
   completed_pingers++;
 }
 
@@ -116,10 +114,8 @@ static void pinger_write_ping(pinger_t* pinger) {
 
 
 static void pinger_shutdown_cb(uv_shutdown_t* req, int status) {
-  uv_handle_t * handle = NULL;
-  pinger_t* pinger;
+  ///printf("pinger_shutdown_cb\n");
 
-  //printf("pinger_shutdown_cb\n");
   ASSERT(status == 0);
   pinger_shutdown_cb_called++;
 
@@ -128,18 +124,6 @@ static void pinger_shutdown_cb(uv_shutdown_t* req, int status) {
    * until we close the connection.
    */
   ASSERT(completed_pingers == 0);
-
-  // !!! doing statistics, then close
-  handle = (uv_handle_t *)req->handle;
-  
-  pinger = (pinger_t*)handle->data;
-  LOGF("ping_pongs: %d roundtrips/s\n", (1000 * pinger->pongs) / TIME);
-
-  free(pinger);
-
-  uv_close(handle, pinger_close_cb);
-
-  //free(req);
 }
 
 
@@ -149,10 +133,9 @@ static void pinger_read_cb(uv_stream_t* udt, ssize_t nread, uv_buf_t buf) {
 
   pinger = (pinger_t*)udt->data;
 
-  //printf("pinger_read_cb, nread %u\n", nread);
   if (nread < 0) {
-	printf("pinger_read_cb: nread<0\n");
-    ASSERT(uv_last_error(loop).code == UV_EOF);
+    ///printf("pinger read < 0\n");
+    ///ASSERT(uv_last_error(loop).code == UV_EOF);
 
     if (buf.base) {
       buf_free(buf);
@@ -172,7 +155,6 @@ static void pinger_read_cb(uv_stream_t* udt, ssize_t nread, uv_buf_t buf) {
       pinger->pongs++;
       if (uv_now(loop) - start_time > TIME) {
         uv_shutdown(&pinger->shutdown_req, (uv_stream_t*) udt, pinger_shutdown_cb);
-    	///uv_shutdown(&pinger->shutdown_req, (uv_stream_t*) udt, pinger_close_cb);
         break;
       } else {
         pinger_write_ping(pinger);
@@ -187,7 +169,7 @@ static void pinger_read_cb(uv_stream_t* udt, ssize_t nread, uv_buf_t buf) {
 static void pinger_connect_cb(uv_connect_t* req, int status) {
   pinger_t *pinger = (pinger_t*)req->handle->data;
 
-  printf("pinger_connect_cb\n");
+  ///printf("pinger_connect_cb\n");
   ASSERT(status == 0);
 
   pinger_write_ping(pinger);

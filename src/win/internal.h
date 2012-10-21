@@ -133,6 +133,8 @@ int uv_udt_read_start(uv_udt_t* handle, uv_alloc_cb alloc_cb,
 int uv_udt_write(uv_loop_t* loop, uv_write_t* req, uv_udt_t* handle,
     uv_buf_t bufs[], int bufcnt, uv_write_cb cb);
 
+void uv_process_udt_poll_req(uv_loop_t* loop, uv_udt_t* handle, uv_req_t* req);
+/*
 void uv_process_udt_read_req(uv_loop_t* loop, uv_udt_t* handle, uv_req_t* req);
 void uv_process_udt_write_req(uv_loop_t* loop, uv_udt_t* handle,
     uv_write_t* req);
@@ -140,7 +142,7 @@ void uv_process_udt_accept_req(uv_loop_t* loop, uv_udt_t* handle,
     uv_req_t* req);
 void uv_process_udt_connect_req(uv_loop_t* loop, uv_udt_t* handle,
     uv_connect_t* req);
-
+*/
 void uv_udt_close(uv_loop_t* loop, uv_udt_t* udt);
 void uv_udt_endgame(uv_loop_t* loop, uv_udt_t* handle);
 

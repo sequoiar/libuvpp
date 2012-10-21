@@ -12,7 +12,7 @@
 #include <errno.h>
 
 
-#define UDT_DEBUG 1
+///#define UDT_DEBUG 1
 
 int uv_udt_init(uv_loop_t* loop, uv_udt_t* udt) {
 	// insure startup UDT
@@ -103,6 +103,7 @@ static int uv__connect(uv_connect_t* req,
 
 #if 1
   r = udt_connect(((uv_udt_t *)handle)->udtfd, addr, addrlen);
+
   ///if (r < 0)
   {
 	  // checking connecting state first
@@ -493,6 +494,7 @@ int uv_translate_udt_error() {
 
 	//case ENETUNREACH: return UV_ENETUNREACH;
 
+	//case ERROR_BROKEN_PIPE: return UV_EOF;
 	case UDT_ECONNLOST: return errno = ECONNABORTED;
 
 	//case ELOOP: return UV_ELOOP;

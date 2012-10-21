@@ -150,24 +150,25 @@ int udt_connect(UDTSOCKET u, const struct sockaddr * name, int namelen)
 
 int udt_close(UDTSOCKET u)
 {
-    int rc;
-    int st = udt_getsockstate(u);
+	int rc;
+	int st = udt_getsockstate(u);
 
-    if ((st == UDT_NONEXIST) ||
-        (st == UDT_CLOSED)   ||
-        (st == UDT_CLOSING)  ||
-        (st == UDT_BROKEN)) {
-        // nothing to do on closed or not existed socket
-        return 0;
-    } else {
-        rc = UDT::close(u);
-        if (rc == UDT::ERROR) {
-            // error happen
-            return -1;
-        } else {
-            return 0;
-        }
-    }
+
+	if ((st == UDT_NONEXIST) ||
+		(st == UDT_CLOSED)   ||
+		(st == UDT_CLOSING)  ||
+		(st == UDT_BROKEN)) {
+		// nothing to do on broken, closing, closed or not existed socket
+		return 0;
+	} else {
+		rc = UDT::close(u);
+		if (rc == UDT::ERROR) {
+			// error happen
+			return -1;
+		} else {
+			return 0;
+		}
+	}
 }
 
 int udt_getpeername(UDTSOCKET u, struct sockaddr * name, int * namelen)

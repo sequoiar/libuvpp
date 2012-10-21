@@ -113,12 +113,6 @@ INLINE static void uv_insert_pending_req(uv_loop_t* loop, uv_req_t* req) {
                                       req);                                   \
         break;                                                                \
                                                                               \
-      case UV_UDT:                                                            \
-        uv_process_udt_##method##_req(loop,                                   \
-                                      (uv_udt_t*) ((req)->handle_at),         \
-                                      req);                                   \
-        break;                                                                \
-                                                                              \
       case UV_NAMED_PIPE:                                                     \
         uv_process_pipe_##method##_req(loop,                                  \
                                        (uv_pipe_t*) ((req)->handle_at),       \
@@ -220,6 +214,10 @@ INLINE static void uv_process_reqs(uv_loop_t* loop) {
 
       case UV_FS_EVENT_REQ:
         uv_process_fs_event_req(loop, req, (uv_fs_event_t*) req->data);
+        break;
+
+      case UV_UDT_POLL:
+        uv_process_udt_poll_req(loop, (uv_udt_t*) req->data, req);
         break;
 
       default:

@@ -351,6 +351,9 @@ UV_EXTERN const char* uv_err_name(uv_err_t err);
   UV_REQ_PRIVATE_FIELDS \
   /* read-only */ \
   uv_req_type type; \
+  /* udt-only */ \
+  char udtdummy; \
+  int udtflag; \
 
 /* Abstract base class of all requests. */
 struct uv_req_s {
@@ -633,17 +636,6 @@ struct uv_connect_s {
   uv_stream_t* handle;
   UV_CONNECT_PRIVATE_FIELDS
 };
-
-
-/*
- * uv_udt_t is a subclass of uv_stream_t
- *
- * Represents a UDT stream or UDT server.
- */
-
-#define UV_UDT_PRIVATE_FIELDS \
-    int udtfd; \
-    int accepted_udtfd;
 
 struct uv_udt_s {
   UV_HANDLE_FIELDS
