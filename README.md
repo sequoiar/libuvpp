@@ -5,6 +5,9 @@ All api is similar to tcp. it's simple to use it:
 
 To build it manually, clone the repository and checkout v0.8-udt branch firstly, then do steps as below.
 
+third-party source:
+UDT4 - http://udt.sourceforge.net/
+
 # libuv [![Build Status](https://secure.travis-ci.org/joyent/libuv.png)](http://travis-ci.org/joyent/libuv)
 
 libuv is a new platform layer for Node. Its purpose is to abstract IOCP on
