@@ -531,7 +531,7 @@ static void uv_udt_queue_accept(uv_udt_t* handle, uv_tcp_accept_t* req) {
   // 2.
   // enqueue accept request
   ///handle->reqs_pending++;
-  printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
+  ///printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
   udt_insert_pending_req_udtaccept(loop, handle, (uv_req_t*)req);
 }
 
@@ -820,7 +820,7 @@ int uv__udt_connect(uv_connect_t* req,
   if (UDT_CONNECTED == stats) {
 	  // insert request immediately
 	  ///handle->reqs_pending++;
-	  printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
+	  ///printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
 	  ///REGISTER_HANDLE_REQ(loop, handle, req);
 	  udt_insert_pending_req_udtconnect(loop, handle, (uv_req_t*)req);
 
@@ -830,7 +830,7 @@ int uv__udt_connect(uv_connect_t* req,
 
 		  uv_insert_pending_req(loop, &handle->udtreq_connect);
 		  ///handle->reqs_pending++;
-		  printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
+		  ///printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
 	  }
   } else if (UDT_CONNECTING == stats) {
 	  // 1.
@@ -840,7 +840,7 @@ int uv__udt_connect(uv_connect_t* req,
 	  // 2.
 	  // enqueue connect request
 	  ///handle->reqs_pending++;
-	  printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
+	  ///printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
 	  ///REGISTER_HANDLE_REQ(loop, handle, req);
 	  udt_insert_pending_req_udtconnect(loop, handle, (uv_req_t*)req);
   } else {
@@ -891,7 +891,7 @@ int uv__udt_connect6(uv_connect_t* req,
   if (UDT_CONNECTED == stats) {
 	  // insert request immediately
 	  ///handle->reqs_pending++;
-	  printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
+	  ///printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
 	  ///REGISTER_HANDLE_REQ(loop, handle, req);
 	  udt_insert_pending_req_udtconnect(loop, handle, (uv_req_t*)req);
 
@@ -900,7 +900,7 @@ int uv__udt_connect6(uv_connect_t* req,
 		  handle->udtflag |= UV_UDT_REQ_CONNECT;
 		  uv_insert_pending_req(loop, &handle->udtreq_connect);
 		  ///handle->reqs_pending++;
-		  printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
+		  ///printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
 	  }
   } else if (UDT_CONNECTING == stats) {
  	 // 1.
@@ -910,7 +910,7 @@ int uv__udt_connect6(uv_connect_t* req,
  	 // 2.
  	 // enqueue connect request
  	 ///handle->reqs_pending++;
- 	 printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
+ 	 ///printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
  	 ///REGISTER_HANDLE_REQ(loop, handle, req);
  	 udt_insert_pending_req_udtconnect(loop, handle, (uv_req_t*)req);
   } else {
@@ -1698,7 +1698,7 @@ int uv_udt_write(uv_loop_t* loop, uv_write_t* req, uv_udt_t* handle,
 		  // 2.
 		  // enqueue write request
 		  ///handle->reqs_pending++;
-		  printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
+		  ///printf("%s:%d, reqs_pending:%d\n", __FUNCTION__, __LINE__, handle->reqs_pending);
 		  handle->write_reqs_pending++;
 		  ///REGISTER_HANDLE_REQ(loop, handle, req);
 		  handle->write_queue_size += req->queued_bytes;
