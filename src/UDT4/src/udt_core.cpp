@@ -818,7 +818,9 @@ POST_CONNECT:
 
 #ifdef EVPIPE_OSFD
    // trigger event pipe
+   ///printf("%s.%s.%d, trigger Connected...", __FILE__, __FUNCTION__, __LINE__);
    s_UDTUnited.feedOsfd(m_SocketID);
+   ///printf("done\n");
 #endif
 
    return 0;
@@ -987,13 +989,7 @@ void CUDT::close()
 
    // Signal the sender and recver if they are waiting for data.
    releaseSynch();
-
-#ifdef EVPIPE_OSFD
-   // trigger event pipe
-   // disable it to avoid error event deadlock, when close socket
-   ///s_UDTUnited.feedOsfd(m_SocketID);
-#endif
-
+   
    if (m_bListening)
    {
       m_bListening = false;
@@ -1813,7 +1809,9 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
 
 #ifdef EVPIPE_OSFD
          // trigger event pipe
+         ///printf("%s.%s.%d, trigger Sent...", __FILE__, __FUNCTION__, __LINE__);
          s_UDTUnited.feedOsfd(m_SocketID);
+         ///printf("done\n");
 #endif
       }
       else if (ack == m_iRcvLastAck)
@@ -2106,8 +2104,9 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
 
 #ifdef EVPIPE_OSFD
       // trigger event pipe
+      ///printf("%s.%s.%d, trigger Ack...", __FILE__, __FUNCTION__, __LINE__);
       s_UDTUnited.feedOsfd(m_SocketID);
-      ///printf("trigger ack ...\n");
+      ///printf("done\n");
 #endif
       break;
       }
@@ -2254,9 +2253,11 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
       CTimer::triggerEvent();
 
 #ifdef EVPIPE_OSFD
-       // trigger event pipe
-       // TBD... verify if need to disable it to avoid error event deadlock, when close socket
-       s_UDTUnited.feedOsfd(m_SocketID);
+      // trigger event pipe
+      // TBD... verify if need to disable it to avoid error event deadlock, when close socket
+      ///printf("%s.%s.%d, trigger Shutdown...\n", __FILE__, __FUNCTION__, __LINE__);
+      s_UDTUnited.feedOsfd(m_SocketID);
+      ///printf("done\n");
 #endif
 
       break;
@@ -2562,7 +2563,9 @@ int CUDT::listen(sockaddr* addr, CPacket& packet)
 
 #ifdef EVPIPE_OSFD
             // trigger event pipe
+            ///printf("%s.%s.%d, trigger Listened...", __FILE__, __FUNCTION__, __LINE__);
             s_UDTUnited.feedOsfd(m_SocketID);
+            ///printf("done\n");
 #endif
          }
       }
@@ -2639,6 +2642,13 @@ void CUDT::checkTimers()
          m_bBroken = true;
          m_iBrokenCounter = 30;
 
+#ifdef EVPIPE_OSFD
+         // trigger event pipe right here
+         ///printf("%s.%s.%d, trigger Broken...", __FILE__, __FUNCTION__, __LINE__);
+         s_UDTUnited.feedOsfd(m_SocketID);
+         ///printf("done\n");
+#endif
+
          // update snd U list to remove this socket
          m_pSndQueue->m_pSndUList->update(this);
 
@@ -2649,10 +2659,6 @@ void CUDT::checkTimers()
 
          CTimer::triggerEvent();
 
-#ifdef EVPIPE_OSFD
-         // trigger event pipe
-         s_UDTUnited.feedOsfd(m_SocketID);
-#endif
          return;
       }
 

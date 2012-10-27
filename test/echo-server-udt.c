@@ -33,7 +33,7 @@ static uv_loop_t* loop;
 
 static int server_closed;
 static stream_type serverType;
-static uv_udt_t udtServer;
+static uv_udt_t udtServer[1];
 static uv_handle_t* server;
 
 static void after_write(uv_write_t* req, int status);
@@ -244,35 +244,39 @@ static int tcp6_echo_start(int port) {
 #endif
 
 static int udt4_echo_start(int port) {
-  struct sockaddr_in addr = uv_ip4_addr("0.0.0.0", port);
-  int r;
+	struct sockaddr_in addr;
+	int r;
+	int i;
 
-  server = (uv_handle_t*)&udtServer;
-  serverType = UDT;
+	serverType = UDT;
+	for (i = 0; i < (sizeof(udtServer) / sizeof(udtServer[0])); i ++) {
+		addr = uv_ip4_addr("0.0.0.0", port+i);
+		server = (uv_handle_t*)&udtServer[i];
 
-  r = uv_udt_init(loop, &udtServer);
-  if (r) {
-    /* TODO: Error codes */
-    fprintf(stderr, "Socket creation error\n");
-    return 1;
-  }
+		r = uv_udt_init(loop, &udtServer[i]);
+		if (r) {
+			/* TODO: Error codes */
+			fprintf(stderr, "Socket creation error\n");
+			return 1;
+		}
 
-  r = uv_udt_bind(&udtServer, addr);
-  if (r) {
-    /* TODO: Error codes */
-    fprintf(stderr, "Bind error\n");
-    return 1;
-  }
+		r = uv_udt_bind(&udtServer[i], addr);
+		if (r) {
+			/* TODO: Error codes */
+			fprintf(stderr, "Bind error\n");
+			return 1;
+		}
 
-  r = uv_listen((uv_stream_t*)&udtServer, SOMAXCONN, on_connection);
-  if (r) {
-    /* TODO: Error codes */
-    fprintf(stderr, "Listen error %s\n",
-        uv_err_name(uv_last_error(loop)));
-    return 1;
-  }
+		r = uv_listen((uv_stream_t*)&udtServer[i], SOMAXCONN, on_connection);
+		if (r) {
+			/* TODO: Error codes */
+			fprintf(stderr, "Listen error %s\n",
+					uv_err_name(uv_last_error(loop)));
+			return 1;
+		}
+	}
 
-  return 0;
+	return 0;
 }
 
 int main(int argc, char * argv [])

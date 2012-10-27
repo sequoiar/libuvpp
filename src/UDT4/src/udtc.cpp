@@ -153,7 +153,7 @@ int udt_close(UDTSOCKET u)
 	int rc;
 	int st = udt_getsockstate(u);
 
-
+	///printf("%s.%d,u:%d,state:%d\n", __FUNCTION__, __LINE__, u, st);
 	if ((st == UDT_NONEXIST) ||
 		(st == UDT_CLOSED)   ||
 		(st == UDT_CLOSING)  ||

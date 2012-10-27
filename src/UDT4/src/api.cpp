@@ -109,7 +109,7 @@ m_iMuxID(-1)
 	}
 	rc = fcntl(m_evPipe[1], F_SETFL, flags | O_NONBLOCK); assert(rc != -1);
 
-    cout << "open evPipe fds:" << m_evPipe[0] << "," << m_evPipe[1] << endl;
+    ///printf("open evPipe fds:%d,%d\n", m_evPipe[0], m_evPipe[1]);
 #else
 	// create tcp pair as event pipe
 
@@ -163,7 +163,7 @@ m_iMuxID(-1)
         re_try ++;
 
     	if (rc == SOCKET_ERROR) continue;
-    	// Listen for incomming connections.
+    	// Listen for incoming connections.
         rc = listen(listener, 1);
         if (rc == SOCKET_ERROR) {
             continue;
@@ -204,7 +204,7 @@ m_iMuxID(-1)
 	unsigned long arg = 1;
 	rc = ioctlsocket(m_evPipe[0], FIONBIO, &arg); assert(rc != SOCKET_ERROR);
 	rc = ioctlsocket(m_evPipe[1], FIONBIO, &arg); assert(rc != SOCKET_ERROR);
-    cout << "open evPipe fds:" << m_evPipe[0] << "," << m_evPipe[1] << endl;
+	///printf("open evPipe fds:%d,%d\n", m_evPipe[0], m_evPipe[1]);
 #endif
 
 #endif
@@ -212,10 +212,6 @@ m_iMuxID(-1)
 
 CUDTSocket::~CUDTSocket()
 {
-#ifdef EVPIPE_OSFD
-	char dummy;
-#endif
-
 	if (AF_INET == m_iIPversion)
 	{
 		delete (sockaddr_in*)m_pSelfAddr;
@@ -236,13 +232,8 @@ CUDTSocket::~CUDTSocket()
 #ifndef WIN32
 
 #ifdef EVPIPE_OSFD
-	while (recv(m_evPipe[0], &dummy, sizeof(dummy), 0) > 0);
 	// close event pipe
-	cout << "close evPipe fds:"
-		 << m_evPipe[0]
-         << ","
-         << m_evPipe[1]
-         << endl;
+	///printf("close evPipe fds:%d,%d\n", m_evPipe[0], m_evPipe[1]);
 	close(m_evPipe[0]);
 	close(m_evPipe[1]);
 #endif
@@ -253,14 +244,14 @@ CUDTSocket::~CUDTSocket()
 #else
 
 #ifdef EVPIPE_OSFD
-	while (recv(m_evPipe[0], &dummy, sizeof(dummy), 0) > 0);
+	///char dummy = 0x68;
+
+	///printf("close evPipe fds:%d,%d\n", m_evPipe[0], m_evPipe[1]);
+	///send(m_evPipe[1], &dummy, sizeof(dummy), 0);
 	// close event pipe
-	cout << "close evPipe fds:"
-		 << m_evPipe[0]
-         << ","
-         << m_evPipe[1]
-         << endl;
-	closesocket(m_evPipe[0]);
+	///printf("close evPipe fds:%d,%d\n", m_evPipe[0], m_evPipe[1]);
+	// let user close reading socket to avoid loss closing event
+	///closesocket(m_evPipe[0]);
 	closesocket(m_evPipe[1]);
 #endif
 
@@ -272,7 +263,6 @@ CUDTSocket::~CUDTSocket()
 
 CUDTUnited::CUDTUnited():
 m_Sockets(),
-///m_Osfds(),
 m_ControlLock(),
 m_IDLock(),
 m_SocketID(0),
@@ -367,6 +357,8 @@ int CUDTUnited::startup()
       m_GCStopCond = CreateEvent(NULL, false, false, NULL);
       DWORD ThreadID;
       m_GCThread = CreateThread(NULL, 0, garbageCollect, this, 0, &ThreadID);
+      // adjust thread priority
+      ///assert(SetThreadPriority(m_GCThread, THREAD_PRIORITY_TIME_CRITICAL/*THREAD_PRIORITY_ABOVE_NORMAL*/));
    #endif
 
    m_bGCStatus = true;
@@ -454,8 +446,6 @@ UDTSOCKET CUDTUnited::newSocket(int af, int type)
    try
    {
       m_Sockets[ns->m_SocketID] = ns;
-      ///m_Osfds[ns->m_evPipe[0]] = ns->m_SocketID;
-      ///cout << "insert Osfd: " << ns->m_evPipe[0] << endl;
    }
    catch (...)
    {
@@ -576,8 +566,6 @@ int CUDTUnited::newConnection(const UDTSOCKET listen, const sockaddr* peer, CHan
    try
    {
       m_Sockets[ns->m_SocketID] = ns;
-      ///m_Osfds[ns->m_evPipe[0]] = ns->m_SocketID;
-      ///cout << "insert Osfd: " << ns->m_evPipe[0] << endl;
       m_PeerRec[(ns->m_PeerID << 30) + ns->m_iISN].insert(ns->m_SocketID);
    }
    catch (...)
@@ -607,7 +595,7 @@ int CUDTUnited::newConnection(const UDTSOCKET listen, const sockaddr* peer, CHan
    feedOsfd(listen);
 #endif
 
-   ERR_ROLLBACK:
+ERR_ROLLBACK:
    if (error > 0)
    {
       ns->m_pUDT->close();
@@ -672,14 +660,15 @@ SYSSOCKET CUDTUnited::getOsfd(const UDTSOCKET u)
 
 	map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.find(u);
 	if ((i == m_Sockets.end()) || (i->second->m_Status == CLOSED)) {
-		throw CUDTException(5, 4, 0);
+		///throw CUDTException(5, 4, 0);
+		///printf("getOsfd: invalid osfd\n");
 #ifdef WIN32
 		return INVALID_SOCKET;
 #else
 		return -1;
 #endif
 	} else {
-		///cout << "getOsfd of UDT@" << u << endl;
+		///printf("getOsfd of UDT@%d\n", u);
 		return i->second->m_evPipe[0];
 	}
 }
@@ -691,10 +680,11 @@ int CUDTUnited::feedOsfd(const UDTSOCKET u)
 
 	map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.find(u);
 	if ((i == m_Sockets.end()) || (i->second->m_Status == CLOSED)) {
-		throw CUDTException(5, 4, 0);
+		///throw CUDTException(5, 4, 0);
+		///printf("feedOsfd: invalid osfd\n");
 		return -1;
 	} else {
-		///cout << "feedOsfd of UDT@" << u << endl;
+		///printf("feedOsfd of UDT@%d\n", u);
 		char dummy;
 #ifndef WIN32
 		recv(i->second->m_evPipe[0], &dummy, sizeof(dummy), 0);
@@ -943,11 +933,9 @@ UDTSOCKET CUDTUnited::accept(const UDTSOCKET listen, sockaddr* addr, int* addrle
       memcpy(addr, locate(u)->m_pPeerAddr, *addrlen);
    }
 
-   cout << "accept event pipe[2]:" 
-        << locate(u)->m_evPipe[0] 
-        << "," 
-        << locate(u)->m_evPipe[1] 
-        << endl;
+   ///printf("accept event pipe[2]:%d,%d\n",
+   ///locate(u)->m_evPipe[0],
+   ///locate(u)->m_evPipe[1]);
 
    return u;
 }
@@ -1038,12 +1026,14 @@ int CUDTUnited::close(const UDTSOCKET u)
    if (NULL == s)
       throw CUDTException(5, 4, 0);
 
-   CGuard socket_cg(s->m_ControlLock);
-
 #ifdef EVPIPE_OSFD
    // trigger event pipe to notify closing
+   ///printf("%s.%s.%d, trigger Closing...", __FILE__, __FUNCTION__, __LINE__);
    feedOsfd(s->m_SocketID);
+   ///printf("done\n");
 #endif
+
+   CGuard socket_cg(s->m_ControlLock);
 
    if (s->m_Status == LISTENING)
    {
@@ -1522,8 +1512,6 @@ void CUDTUnited::removeSocket(const UDTSOCKET u)
    }
 
    // delete this one
-   ///m_Osfds.erase(i->second->m_evPipe[0]);
-   ///cout << "delete Osfd: " << i->second->m_evPipe[0] << endl;
    i->second->m_pUDT->close();
    delete i->second;
    m_ClosedSockets.erase(i);
@@ -1753,8 +1741,6 @@ void CUDTUnited::updateMux(CUDTSocket* s, const CUDTSocket* ls)
       CGuard::leaveCS(ls->second->m_AcceptLock);
    }
    self->m_Sockets.clear();
-   ///self->m_Osfds.clear();
-   ///cout << "clear Osfds" << endl;
 
    for (map<UDTSOCKET, CUDTSocket*>::iterator j = self->m_ClosedSockets.begin(); j != self->m_ClosedSockets.end(); ++ j)
    {

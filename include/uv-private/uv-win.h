@@ -355,11 +355,17 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
  *
  * Represents a UDT stream or UDT server.
  */
-#define UV_UDT_REQ_POLL    0x1
-#define UV_UDT_REQ_READ    0x2
-#define UV_UDT_REQ_WRITE   0x4
-#define UV_UDT_REQ_ACCEPT  0x8
-#define UV_UDT_REQ_CONNECT 0x10
+#define UV_UDT_REQ_POLL        0x1
+#define UV_UDT_REQ_READ        0x2
+#define UV_UDT_REQ_WRITE       0x4
+#define UV_UDT_REQ_ACCEPT      0x8
+#define UV_UDT_REQ_CONNECT     0x10
+
+// dedicated error poll request
+#define UV_UDT_REQ_POLL_ERROR  0x100
+
+// active poll flags
+#define UV_UDT_REQ_POLL_ACTIVE 0x1000
 
 #define UV_UDT_PRIVATE_FIELDS                                                   \
     int udtfd;                                                                  \
@@ -375,7 +381,8 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
     uv_req_t  udtreq_read;                                                      \
     uv_req_t  udtreq_write;                                                     \
     uv_req_t  udtreq_accept;                                                    \
-    uv_req_t  udtreq_connect;
+    uv_req_t  udtreq_connect;                                                   \
+    uv_req_t  udtreq_poll_error;
 
 #define UV_UDP_PRIVATE_FIELDS             \
   SOCKET socket;                          \

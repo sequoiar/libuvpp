@@ -111,7 +111,7 @@
         'defines': [
           'WIN32',
           'EVPIPE_OSFD',
-	  'UDT_EXPORTS',
+          'UDT_EXPORTS',
           # we don't really want VC++ warning us about
           # how dangerous C functions are...
           '_CRT_SECURE_NO_DEPRECATE',
@@ -149,8 +149,8 @@
           'GCC_CW_ASM_SYNTAX': 'NO',                # No -fasm-blocks
           'GCC_DYNAMIC_NO_PIC': 'NO',               # No -mdynamic-no-pic
                                                     # (Equivalent to -fPIC)
-          'GCC_ENABLE_CPP_EXCEPTIONS': 'NO',        # -fno-exceptions
-          'GCC_ENABLE_CPP_RTTI': 'NO',              # -fno-rtti
+          'GCC_ENABLE_CPP_EXCEPTIONS': 'YES',       # -fno-exceptions
+          'GCC_ENABLE_CPP_RTTI': 'YES',             # -fno-rtti
           'GCC_ENABLE_PASCAL_STRINGS': 'NO',        # No -mpascal-strings
           # GCC_INLINES_ARE_PRIVATE_EXTERN maps to -fvisibility-inlines-hidden
           'GCC_INLINES_ARE_PRIVATE_EXTERN': 'YES',
@@ -161,6 +161,8 @@
           'USE_HEADERMAP': 'NO',
           'OTHER_CFLAGS': [
             '-fno-strict-aliasing',
+            '-DLINUX', 
+            '-DEVPIPE_OSFD',
           ],
           'WARNING_CFLAGS': [
             '-Wall',

@@ -560,11 +560,11 @@ int udt__accept(int sockfd) {
 		peerfd = -1;
 	}
 
-	char clienthost[NI_MAXHOST];
-	char clientservice[NI_MAXSERV];
+	///char clienthost[NI_MAXHOST];
+	///char clientservice[NI_MAXSERV];
 
-	getnameinfo((struct sockaddr*)&saddr, sizeof saddr, clienthost, sizeof(clienthost), clientservice, sizeof(clientservice), NI_NUMERICHOST|NI_NUMERICSERV);
-	fprintf(stdout, "new connection: %s:%s\n", clienthost, clientservice);
+	///getnameinfo((struct sockaddr*)&saddr, sizeof saddr, clienthost, sizeof(clienthost), clientservice, sizeof(clientservice), NI_NUMERICHOST|NI_NUMERICSERV);
+	///fprintf(stdout, "new connection: %s:%s\n", clienthost, clientservice);
 
 	return peerfd;
 }

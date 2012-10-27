@@ -144,7 +144,7 @@
             'EIO_STACKSIZE=262144',
             '_GNU_SOURCE',
             'EVPIPE_OSFD',
-	    'UDT_EXPORTS'
+            'UDT_EXPORTS'
           ],
           'sources': [
             'include/uv-private/uv-win.h',
@@ -260,6 +260,8 @@
             '_DARWIN_USE_64_BIT_INODE=1',
             'EV_CONFIG_H="config_darwin.h"',
             'EIO_CONFIG_H="config_darwin.h"',
+            'LINUX=1',
+            'EVPIPE_OSFD=1',
           ]
         }],
         [ 'OS=="linux"', {

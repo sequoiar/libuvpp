@@ -234,7 +234,8 @@ static void uv_poll_ex(uv_loop_t* loop, int block) {
       req = uv_overlapped_to_req(overlappeds[i].lpOverlapped);
       uv_insert_pending_req(loop, req);
     }
-  } else if (GetLastError() != WAIT_TIMEOUT) {
+  } else if ((GetLastError() != WAIT_TIMEOUT) &&
+		     (GetLastError() != ERROR_ABANDONED_WAIT_0)) {
     /* Serious error */
     uv_fatal_error(GetLastError(), "GetQueuedCompletionStatusEx");
   }
