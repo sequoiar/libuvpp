@@ -11,6 +11,10 @@ UDT4 - http://udt.sourceforge.net/
 discussion group:
 https://groups.google.com/d/forum/iwebpp
 
+Wiki page:
+https://github.com/InstantWebP2P/libuvpp/wiki/An-introduction-to-libuvpp
+
+
 # libuv [![Build Status](https://secure.travis-ci.org/joyent/libuv.png)](http://travis-ci.org/joyent/libuv)
 
 libuv is a new platform layer for Node. Its purpose is to abstract IOCP on
