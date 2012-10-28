@@ -1,7 +1,7 @@
 Porting UDT(UDP-based transport) to libuv as the transport of HTTPP(run http over udp). 
-All api is similar to tcp. it's simple to use it: 
-1. replace tcp litera with udt, like uv_tcp_t to uv_udt_t.
-2. do the rest as tcp.
+All api is similar to tcp. it's simple to use it: 	
+	1. replace tcp litera with udt, like uv_tcp_t to uv_udt_t.	
+	2. do the rest as tcp.
 
 To build it manually, clone the repository and checkout v0.8-udt branch firstly, then do steps as below.
 
@@ -66,8 +66,8 @@ projects.  The old (more stable) system is using Makefiles.
 
 To checkout the sourcecode:
 
-git clone https://github.com/InstantWebP2P/libuvpp.git
-git checkout v0.8-udt
+    git clone https://github.com/InstantWebP2P/libuvpp.git
+    git checkout v0.8-udt
 
 
 To build via Makefile simply execute:
