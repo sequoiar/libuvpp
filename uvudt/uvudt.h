@@ -14,6 +14,21 @@ extern "C" {
 #if defined(__unix__) || defined(__POSIX__) || defined(__APPLE__)
 // Unix-like platform
 
+/* flags */
+enum {
+  UV_CLOSING          = 0x01,   /* uv_close() called but not finished. */
+  UV_CLOSED           = 0x02,   /* close(2) finished. */
+  UV_STREAM_READING   = 0x04,   /* uv_read_start() called. */
+  UV_STREAM_SHUTTING  = 0x08,   /* uv_shutdown() called but not complete. */
+  UV_STREAM_SHUT      = 0x10,   /* Write side closed. */
+  UV_STREAM_READABLE  = 0x20,   /* The stream is readable */
+  UV_STREAM_WRITABLE  = 0x40,   /* The stream is writable */
+  UV_STREAM_BLOCKING  = 0x80,   /* Synchronous writes. */
+  UV_TCP_NODELAY      = 0x100,  /* Disable Nagle. */
+  UV_TCP_KEEPALIVE    = 0x200   /* Turn on keep-alive. */
+};
+
+
 /*
  * uv_udt_t is a subclass of uv_stream_t
  *
@@ -111,13 +126,11 @@ UV_EXTERN int uv_udt_shutdown(uv_shutdown_t* req, uv_stream_t* handle,
 UV_EXTERN void uv_udt_close(uv_handle_t* handle, uv_close_cb close_cb);
 
 
-// UDT handle type
+// UDT handle type, a sub-class of uv_tcp_t
 typedef struct uv_udt_s {
-  UV_HANDLE_FIELDS
-  UV_STREAM_FIELDS
-  UV_TCP_PRIVATE_FIELDS
-  UV_UDT_PRIVATE_FIELDS
-  uv_poll_t uvpoll;
+	uv_tcp_t tcp;
+	uv_poll_t uvpoll;
+	UV_UDT_PRIVATE_FIELDS
 } uv_udt_t;
 
 
@@ -149,7 +162,7 @@ UV_EXTERN int uv_udt_connect6(uv_connect_t* req, uv_udt_t* handle,
 UV_EXTERN int uv_udt_setrendez(uv_udt_t* handle, int enable);
 
 /* binding udt socket on existing udp socket/fd */
-UV_EXTERN int uv_udt_bindfd(uv_udt_t* handle, uv_syssocket_t udpfd);
+UV_EXTERN int uv_udt_bindfd(uv_udt_t* handle, uv_os_sock_t udpfd);
 
 
 /* Don't export the private CPP symbols. */

@@ -2,8 +2,8 @@
 
 #ifndef WIN32
 
-#include "uv.h"
 #include "uvudt.h"
+
 #include "udtc.h"
 
 #include <stdio.h>
@@ -16,17 +16,8 @@
 
 ///#define UDT_DEBUG 1
 
-int uv_udt_init(uv_loop_t* loop, uv_udt_t* udt) {
-	// insure startup UDT
-	udt_startup();
-
-	uv_tcp_init(loop, (uv_tcp_t*)udt);
-
-    udt->udtfd = udt->accepted_udtfd = -1;
-
-	return 0;
-}
-
+#define container_of(ptr, type, member) \
+  ((type *) ((char *) (ptr) - offsetof(type, member)))
 
 // consume UDT Os fd event
 static void udt_consume_osfd(int os_fd)
@@ -37,6 +28,72 @@ static void udt_consume_osfd(int os_fd)
 	recv(os_fd, &dummy, sizeof(dummy), 0);
 
 	errno = saved_errno;
+}
+
+
+static int udt__nonblock(int udtfd, int set)
+{
+    int block = (set ? 0 : 1);
+    int rc1, rc2;
+
+    rc1 = udt_setsockopt(udtfd, 0, (int)UDT_UDT_SNDSYN, (void *)&block, sizeof(block));
+    rc2 = udt_setsockopt(udtfd, 0, (int)UDT_UDT_RCVSYN, (void *)&block, sizeof(block));
+
+    return (rc1 | rc2);
+}
+
+
+inline static void uv__req_init(uv_loop_t* loop,
+                                uv_req_t* req,
+                                uv_req_type type) {
+  loop->counters.req_init++;
+  req->type = type;
+  uv__req_register(loop, req);
+}
+
+
+// UDT socket operation
+static int udt__socket(int domain, int type, int protocol) {
+	int sockfd;
+
+	sockfd = udt_socket(domain, type, protocol);
+
+	if (sockfd == -1)
+		goto out;
+
+	if (udt__nonblock(sockfd, 1)) {
+		udt_close(sockfd);
+		sockfd = -1;
+	}
+
+out:
+	return sockfd;
+}
+
+
+static int udt__accept(int sockfd) {
+	int peerfd = -1;
+	struct sockaddr_storage saddr;
+	int namelen = sizeof saddr;
+
+	assert(sockfd >= 0);
+
+	if ((peerfd = udt_accept(sockfd, (struct sockaddr *)&saddr, &namelen)) == -1) {
+		return -1;
+	}
+
+	if (udt__nonblock(peerfd, 1)) {
+		udt_close(peerfd);
+		peerfd = -1;
+	}
+
+	///char clienthost[NI_MAXHOST];
+	///char clientservice[NI_MAXSERV];
+
+	///getnameinfo((struct sockaddr*)&saddr, sizeof saddr, clienthost, sizeof(clienthost), clientservice, sizeof(clientservice), NI_NUMERICHOST|NI_NUMERICSERV);
+	///fprintf(stdout, "new connection: %s:%s\n", clienthost, clientservice);
+
+	return peerfd;
 }
 
 
@@ -103,6 +160,26 @@ static size_t uv__buf_count(uv_buf_t bufs[], int bufcnt) {
 }
 
 
+// write process
+static uv_write_t* uv_write_queue_head(uv_stream_t* stream) {
+  ngx_queue_t* q;
+  uv_write_t* req;
+
+  if (ngx_queue_empty(&stream->write_queue)) {
+    return NULL;
+  }
+
+  q = ngx_queue_head(&stream->write_queue);
+  if (!q) {
+    return NULL;
+  }
+
+  req = ngx_queue_data(q, struct uv_write_s, queue);
+  assert(req);
+
+  return req;
+}
+
 static void uv__drain(uv_stream_t* stream) {
   uv_shutdown_t* req;
 
@@ -120,7 +197,7 @@ static void uv__drain(uv_stream_t* stream) {
 	  uv__req_unregister(stream->loop, req);
 
 	  // clear pending Os fd event
-	  udt_consume_osfd(((uv_udt_t *)stream)->fd);
+	  udt_consume_osfd(((uv_udt_t *)stream)->tcp.fd);
 
 	  if (udt_close(((uv_udt_t *)stream)->udtfd)) {
 		  /* Error. Report it. User should call uv_close(). */
@@ -138,7 +215,6 @@ static void uv__drain(uv_stream_t* stream) {
   }
 }
 
-
 static size_t uv__write_req_size(uv_write_t* req) {
   size_t size;
 
@@ -148,7 +224,6 @@ static size_t uv__write_req_size(uv_write_t* req) {
 
   return size;
 }
-
 
 static void uv__write_req_finish(uv_write_t* req) {
   uv_stream_t* stream = req->handle;
@@ -167,7 +242,6 @@ static void uv__write_req_finish(uv_write_t* req) {
   // UDT always polling on read event
   ///uv__io_feed(stream->loop, &stream->write_watcher, UV__IO_READ);
 }
-
 
 /* On success returns NULL. On error returns a pointer to the write request
  * which had the error.
@@ -211,12 +285,12 @@ start:
    * inside the iov each time we write. So there is no need to offset it.
    */
   {
-	  int next = 1;
+	  int next = 1, it;
 	  n = -1;
-	  for (int it = 0; it < iovcnt; it ++) {
+	  for (it = 0; it < iovcnt; it ++) {
 		  size_t ilen = 0;
 		  while (ilen < iov[it].iov_len) {
-			  int rc = udt_send(stream->udtfd, ((char *)iov[it].iov_base)+ilen, iov[it].iov_len-ilen, 0);
+			  int rc = udt_send(((uv_udt_t*)stream)->udtfd, ((char *)iov[it].iov_base)+ilen, iov[it].iov_len-ilen, 0);
 			  if (rc < 0) {
 				  next = 0;
 				  break;
@@ -347,9 +421,9 @@ static void uv__read(uv_stream_t* stream) {
 	/* XXX: Maybe instead of having UV_STREAM_READING we just test if
 	 * tcp->read_cb is NULL or not?
 	 */
-	while ((stream->read_cb || stream->read2_cb)
-			&& (stream->flags & UV_STREAM_READING)
-			&& (count-- > 0)) {
+	while (stream->read_cb &&
+		   (stream->flags & UV_STREAM_READING) &&
+		   (count-- > 0)) {
 		assert(stream->alloc_cb);
 		buf = stream->alloc_cb((uv_handle_t*)stream, 64 * 1024);
 
@@ -391,7 +465,7 @@ static void uv__read(uv_stream_t* stream) {
 
 				/* EOF */
 				uv__set_artificial_error(stream->loop, UV_EOF);
-				uv_poll_stop(&stream->uvpoll);
+				uv_poll_stop(&((uv_udt_t*)stream)->uvpoll);
 				///if (!uv__io_active(&stream->write_watcher))
 				///	uv__handle_stop(stream);
 
@@ -406,7 +480,7 @@ static void uv__read(uv_stream_t* stream) {
 				/* Error. User should call uv_close(). */
 				uv__set_sys_error(stream->loop, udterr);
 
-				uv_poll_stop(&stream->uvpoll);
+				uv_poll_stop(&((uv_udt_t*)stream)->uvpoll);
 				///if (!uv__io_active(&stream->write_watcher))
 				///	uv__handle_stop(stream);
 
@@ -446,7 +520,8 @@ static void uv__read(uv_stream_t* stream) {
 
 
 static void uv__stream_io(uv_poll_t* handle, int status, int events) {
-	uv_udt_t* stream = container_of(handle, uv_udt_t, uvpoll);;
+	uv_udt_t* udt = container_of(handle, uv_udt_t, uvpoll);
+	uv_stream_t* stream = (uv_stream_t*)udt;
 
 
 	// !!! always consume UDT/OSfd event here
@@ -469,7 +544,7 @@ static void uv__stream_io(uv_poll_t* handle, int status, int events) {
 			// check UDT event
 			int udtev, optlen;
 
-			if (udt_getsockopt(stream->udtfd, 0, UDT_UDT_EVENT, &udtev, &optlen) < 0) {
+			if (udt_getsockopt(udt->udtfd, 0, UDT_UDT_EVENT, &udtev, &optlen) < 0) {
 				// check error anyway
 				uv__read(stream);
 
@@ -492,24 +567,25 @@ static void uv__stream_io(uv_poll_t* handle, int status, int events) {
 }
 
 
-static int maybe_new_socket(uv_udt_t* handle, int domain, int flags) {
+static int maybe_new_socket(uv_udt_t* udt, int domain, int flags) {
 	int optlen;
+	uv_stream_t* stream = (uv_stream_t*)udt;
 
-	if (handle->fd != -1)
+	if (stream->fd != -1)
 		return 0;
 
-	if ((handle->udtfd = udt__socket(domain, SOCK_STREAM, 0)) == -1) {
-		return uv__set_sys_error(handle->loop, uv_translate_udt_error());
+	if ((udt->udtfd = udt__socket(domain, SOCK_STREAM, 0)) == -1) {
+		return uv__set_sys_error(stream->loop, uv_translate_udt_error());
 	}
 
 	// fill Osfd
-	assert(udt_getsockopt(handle->udtfd, 0, UDT_UDT_OSFD, &handle->fd, &optlen) == 0);
+	assert(udt_getsockopt(udt->udtfd, 0, UDT_UDT_OSFD, &stream->fd, &optlen) == 0);
 
 	stream->flags |= flags;
 
 	// Associate stream io with uv_poll
-	uv_poll_init_socket(handle->loop, &handle->uvpoll, handle->fd);
-	uv_poll_start(&handle->uvpoll, UV_READABLE, uv__stream_io);
+	uv_poll_init_socket(stream->loop, &udt->uvpoll, stream->fd);
+	uv_poll_start(&udt->uvpoll, UV_READABLE, uv__stream_io);
 
 	return 0;
 }
@@ -523,6 +599,7 @@ static int uv__bind(
 {
 	int saved_errno;
 	int status;
+	uv_stream_t* stream = (uv_stream_t*)udt;
 
 	saved_errno = errno;
 	status = -1;
@@ -530,14 +607,14 @@ static int uv__bind(
 	if (maybe_new_socket(udt, domain, UV_STREAM_READABLE | UV_STREAM_WRITABLE))
 	    return -1;
 
-	assert(udt->fd >= 0);
+	assert(stream->fd >= 0);
 
-	udt->delayed_error = 0;
+	stream->delayed_error = 0;
 	if (udt_bind(udt->udtfd, addr, addrsize) < 0) {
 		if (udt_getlasterror_code() == UDT_EBOUNDSOCK) {
-			udt->delayed_error = EADDRINUSE;
+			stream->delayed_error = EADDRINUSE;
 		} else {
-			uv__set_sys_error(udt->loop, uv_translate_udt_error());
+			uv__set_sys_error(stream->loop, uv_translate_udt_error());
 			goto out;
 		}
 	}
@@ -550,30 +627,31 @@ out:
 
 
 static int uv__connect(uv_connect_t* req,
-                       uv_udt_t* handle,
+                       uv_udt_t* udt,
                        struct sockaddr* addr,
                        socklen_t addrlen,
                        uv_connect_cb cb) {
   int r;
+  uv_stream_t* stream = (uv_stream_t*)udt;
 
-  assert(handle->type == UV_TCP);
+  assert(stream->type == UV_TCP);
 
-  if (handle->connect_req)
-    return uv__set_sys_error(handle->loop, EALREADY);
+  if (stream->connect_req)
+    return uv__set_sys_error(stream->loop, EALREADY);
 
-  if (maybe_new_socket(handle,
+  if (maybe_new_socket(stream,
                        addr->sa_family,
                        UV_STREAM_READABLE|UV_STREAM_WRITABLE)) {
     return -1;
   }
 
-  handle->delayed_error = 0;
+  stream->delayed_error = 0;
 
-  r = udt_connect(((uv_udt_t *)handle)->udtfd, addr, addrlen);
+  r = udt_connect(udt->udtfd, addr, addrlen);
   ///if (r < 0)
   {
 	  // checking connecting state first
-	  if (UDT_CONNECTING == udt_getsockstate(((uv_udt_t *)handle)->udtfd)) {
+	  if (UDT_CONNECTING == udt_getsockstate(udt->udtfd)) {
 		  ; /* not an error */
 	  } else {
 		  switch (udt_getlasterror_code()) {
@@ -582,25 +660,25 @@ static int uv__connect(uv_connect_t* req,
 		   * wait.
 		   */
 		  case UDT_ECONNREJ:
-			  handle->delayed_error = ECONNREFUSED;
+			  stream->delayed_error = ECONNREFUSED;
 			  break;
 
 		  default:
-			  return uv__set_sys_error(handle->loop, uv_translate_udt_error());
+			  return uv__set_sys_error(stream->loop, uv_translate_udt_error());
 		  }
 	  }
   }
 
-  uv__req_init(handle->loop, req, UV_CONNECT);
+  uv__req_init(stream->loop, req, UV_CONNECT);
   req->cb = cb;
-  req->handle = (uv_stream_t*) handle;
+  req->handle = stream;
   ngx_queue_init(&req->queue);
-  handle->connect_req = req;
+  stream->connect_req = req;
 
-  uv__io_start(handle->loop, &handle->write_watcher);
+  ///uv__io_start(handle->loop, &handle->write_watcher);
 
-  if (handle->delayed_error)
-    uv__io_feed(handle->loop, &handle->write_watcher, UV__IO_READ);
+  ///if (handle->delayed_error)
+  ///  uv__io_feed(handle->loop, &handle->write_watcher, UV__IO_READ);
 
   return 0;
 }
@@ -609,55 +687,56 @@ static int uv__connect(uv_connect_t* req,
 // binding on existing udp socket/fd ///////////////////////////////////////////
 static int uv__bindfd(
     	uv_udt_t* udt,
-        int udpfd)
+    	uv_os_sock_t udpfd)
 {
 	int saved_errno;
 	int status;
 	int optlen;
+	uv_stream_t* stream = (uv_stream_t*)udt;
 
 	saved_errno = errno;
 	status = -1;
 
-	if (udt->fd < 0) {
-        	// extract domain info by existing udpfd ///////////////////////////////
-        	struct sockaddr_storage addr;
-        	socklen_t addrlen = sizeof(addr);
-        	int domain = AF_INET;
+	if (stream->fd < 0) {
+		// extract domain info by existing udpfd ///////////////////////////////
+		struct sockaddr_storage addr;
+		socklen_t addrlen = sizeof(addr);
+		int domain = AF_INET;
 
-        	if (getsockname(udpfd, (struct sockaddr *)&addr, &addrlen) < 0) {
-            		uv__set_sys_error(udt->loop, uv_translate_udt_error());
+		if (getsockname(udpfd, (struct sockaddr *)&addr, &addrlen) < 0) {
+			uv__set_sys_error(stream->loop, uv_translate_udt_error());
 			goto out;
-        	}
-        	domain = addr.ss_family;
-        	////////////////////////////////////////////////////////////////////////
+		}
+		domain = addr.ss_family;
+		////////////////////////////////////////////////////////////////////////
 
 		if ((udt->udtfd = udt__socket(domain, SOCK_STREAM, 0)) == -1) {
-            		uv__set_sys_error(udt->loop, uv_translate_udt_error());
+			uv__set_sys_error(stream->loop, uv_translate_udt_error());
 			goto out;
 		}
 
 		// fill Osfd
-		assert(udt_getsockopt(udt->udtfd, 0, (int)UDT_UDT_OSFD, &udt->fd, &optlen) == 0);
+		assert(udt_getsockopt(udt->udtfd, 0, (int)UDT_UDT_OSFD, &stream->fd, &optlen) == 0);
 
 		if (uv__stream_open(
-				(uv_stream_t*)udt,
-				udt->fd,
+				udt,
+				stream->fd,
 				UV_READABLE | UV_WRITABLE)) {
 			udt_close(udt->udtfd);
-			udt->fd = -1;
+			stream->fd = -1;
 			status = -2;
 			goto out;
 		}
 	}
 
-	assert(udt->fd >= 0);
+	assert(stream->fd >= 0);
 
-	udt->delayed_error = 0;
+	stream->delayed_error = 0;
 	if (udt_bind2(udt->udtfd, udpfd) == -1) {
 		if (udt_getlasterror_code() == UDT_EBOUNDSOCK) {
-			udt->delayed_error = EADDRINUSE;
+			stream->delayed_error = EADDRINUSE;
 		} else {
-			uv__set_sys_error(udt->loop, uv_translate_udt_error());
+			uv__set_sys_error(stream->loop, uv_translate_udt_error());
 			goto out;
 		}
 	}
@@ -669,7 +748,21 @@ out:
 }
 
 
-int uv_udt_bind(uv_udt_t* handle, struct sockaddr_in addr) {
+int uv_udt_init(uv_loop_t* loop, uv_udt_t* udt) {
+	// insure startup UDT
+	udt_startup();
+
+	uv_tcp_init(loop, (uv_tcp_t*)udt);
+
+    udt->udtfd = udt->accepted_udtfd = -1;
+
+	return 0;
+}
+
+
+int uv_udt_bind(uv_udt_t* udt, struct sockaddr_in addr) {
+	uv_stream_t* handle = (uv_stream_t*)udt;
+
 	if (handle->type != UV_TCP || addr.sin_family != AF_INET) {
 		uv__set_artificial_error(handle->loop, UV_EFAULT);
 		return -1;
@@ -683,7 +776,9 @@ int uv_udt_bind(uv_udt_t* handle, struct sockaddr_in addr) {
 }
 
 
-int uv_udt_bind6(uv_udt_t* handle, struct sockaddr_in6 addr) {
+int uv_udt_bind6(uv_udt_t* udt, struct sockaddr_in6 addr) {
+	uv_stream_t* handle = (uv_stream_t*)udt;
+
 	if (handle->type != UV_TCP || addr.sin6_family != AF_INET6) {
 		uv__set_artificial_error(handle->loop, UV_EFAULT);
 		return -1;
@@ -697,21 +792,24 @@ int uv_udt_bind6(uv_udt_t* handle, struct sockaddr_in6 addr) {
 }
 
 
-int uv_udt_bindfd(uv_udt_t* handle, uv_syssocket_t udpfd) {
-  if (handle->type != UV_TCP) {
-    uv__set_artificial_error(handle->loop, UV_EFAULT);
-    return -1;
-  }
+int uv_udt_bindfd(uv_udt_t* udt, uv_os_sock_t udpfd) {
+	uv_handle_t* handle = (uv_handle_t*)udt;
 
-  return uv__bindfd(handle, udpfd);
+	if (handle->type != UV_TCP) {
+		uv__set_artificial_error(handle->loop, UV_EFAULT);
+		return -1;
+	}
+
+	return uv__bindfd(handle, udpfd);
 }
 /////////////////////////////////////////////////////////////////////////////////
 
 
-int uv_udt_getsockname(uv_udt_t* handle, struct sockaddr* name,
+int uv_udt_getsockname(uv_udt_t* udt, struct sockaddr* name,
 		int* namelen) {
 	int saved_errno;
 	int rv = 0;
+	uv_stream_t* handle = (uv_stream_t*)udt;
 
 	/* Don't clobber errno. */
 	saved_errno = errno;
@@ -728,7 +826,7 @@ int uv_udt_getsockname(uv_udt_t* handle, struct sockaddr* name,
 		goto out;
 	}
 
-	if (udt_getsockname(handle->udtfd, name, namelen) == -1) {
+	if (udt_getsockname(udt->udtfd, name, namelen) == -1) {
 		uv__set_sys_error(handle->loop, uv_translate_udt_error());
 		rv = -1;
 	}
@@ -739,10 +837,11 @@ out:
 }
 
 
-int uv_udt_getpeername(uv_udt_t* handle, struct sockaddr* name,
+int uv_udt_getpeername(uv_udt_t* udt, struct sockaddr* name,
 		int* namelen) {
 	int saved_errno;
 	int rv = 0;
+	uv_stream_t* handle = (uv_stream_t*)udt;
 
 	/* Don't clobber errno. */
 	saved_errno = errno;
@@ -759,7 +858,7 @@ int uv_udt_getpeername(uv_udt_t* handle, struct sockaddr* name,
 		goto out;
 	}
 
-	if (udt_getpeername(handle->udtfd, name, namelen) == -1) {
+	if (udt_getpeername(udt->udtfd, name, namelen) == -1) {
 		uv__set_sys_error(handle->loop, uv_translate_udt_error());
 		rv = -1;
 	}
@@ -771,7 +870,8 @@ out:
 
 
 static void uv__server_io(uv_poll_t* handle, int status, int events) {
-	uv_udt_t* stream = container_of(handle, uv_udt_t, uvpoll);;
+	uv_udt_t* udt = container_of(handle, uv_udt_t, uvpoll);
+	uv_stream_t* stream = (uv_stream_t*)udt;
 
 
 	// !!! always consume UDT/OSfd event here
@@ -786,7 +886,7 @@ static void uv__server_io(uv_poll_t* handle, int status, int events) {
 		assert(!(stream->flags & UV_CLOSING));
 
 		if (stream->accepted_fd >= 0) {
-			uv_poll_stop(&stream->uvpoll);
+			uv_poll_stop(&udt->uvpoll);
 			return;
 		}
 
@@ -796,7 +896,7 @@ static void uv__server_io(uv_poll_t* handle, int status, int events) {
 		while (stream->fd != -1) {
 			assert(stream->accepted_fd < 0);
 
-			udtfd = udt__accept(tream->udtfd);
+			udtfd = udt__accept(udt->udtfd);
 			if (udtfd < 0) {
 				///fprintf(stdout, "func:%s, line:%d, errno: %d, %s\n", __FUNCTION__, __LINE__, udt_getlasterror_code(), udt_getlasterror_desc());
 
@@ -810,17 +910,17 @@ static void uv__server_io(uv_poll_t* handle, int status, int events) {
 					continue;
 				} else {
 					uv__set_sys_error(stream->loop, errno);
-					stream->connection_cb((uv_stream_t*)stream, -1);
+					stream->connection_cb(stream, -1);
 				}
 			} else {
-				stream->accepted_udtfd = udtfd;
+				udt->accepted_udtfd = udtfd;
 				// fill Os fd
 				assert(udt_getsockopt(udtfd, 0, (int)UDT_UDT_OSFD, &stream->accepted_fd, &optlen) == 0);
 
-				stream->connection_cb((uv_stream_t*)stream, 0);
+				stream->connection_cb(stream, 0);
 				if (stream->accepted_fd >= 0) {
 					/* The user hasn't yet accepted called uv_accept() */
-					uv_poll_stop(&stream->uvpoll);
+					uv_poll_stop(&udt->uvpoll);
 					return;
 				}
 			}
@@ -834,8 +934,10 @@ static void uv__server_io(uv_poll_t* handle, int status, int events) {
 
 
 int uv_udt_accept(uv_stream_t* server, uv_stream_t* client) {
-	uv_udt_t* streamServer;
-	uv_udt_t* streamClient;
+	uv_udt_t* udtServer;
+	uv_udt_t* udtClient;
+	uv_tcp_t* streamServer;
+	uv_tcp_t* streamClient;
 	int saved_errno;
 	int status;
 
@@ -845,21 +947,23 @@ int uv_udt_accept(uv_stream_t* server, uv_stream_t* client) {
 	saved_errno = errno;
 	status = -1;
 
-	streamServer = (uv_udt_t*)server;
-	streamClient = (uv_udt_t*)client;
+	udtServer = (uv_udt_t*)server;
+	udtClient = (uv_udt_t*)client;
+	streamServer = (uv_tcp_t*)server;
+	streamClient = (uv_tcp_t*)client;
 
 	if (streamServer->accepted_fd < 0) {
-		uv__set_sys_error(server->loop, EAGAIN);
+		uv__set_sys_error(streamServer->loop, EAGAIN);
 		goto out;
 	}
+	streamClient->fd = streamServer->accepted_fd;
+	streamClient->flags |= (UV_STREAM_READABLE | UV_STREAM_WRITABLE);
 
-	streamClient->udtfd = streamServer->accepted_udtfd;
-
-	stream->flags |= flags;
+	udtClient->udtfd = udtServer->accepted_udtfd;
 
 	// Associate stream io with uv_poll
-	uv_poll_init_socket(stream->loop, &stream->uvpoll, stream->fd);
-	uv_poll_start(&stream->uvpoll, UV_READABLE, uv__stream_io);
+	uv_poll_init_socket(streamClient->loop, &udtClient->uvpoll, streamClient->fd);
+	uv_poll_start(&udtClient->uvpoll, UV_READABLE, uv__stream_io);
 
 	streamServer->accepted_fd = -1;
 	status = 0;
@@ -870,42 +974,45 @@ out:
 }
 
 
-int uv_udt_listen(uv_udt_t* udt, int backlog, uv_connection_cb cb) {
-	if (udt->delayed_error)
-		return uv__set_sys_error(udt->loop, udt->delayed_error);
+int uv_udt_listen(uv_stream_t* handle, int backlog, uv_connection_cb cb) {
+	uv_udt_t* udt = (uv_udt_t*)handle;
+
+	if (handle->delayed_error)
+		return uv__set_sys_error(handle->loop, handle->delayed_error);
 
 	if (maybe_new_socket(udt, AF_INET, UV_STREAM_READABLE))
 		return -1;
 
 	if (udt_listen(udt->udtfd, backlog) < 0)
-		return uv__set_sys_error(udt->loop, uv_translate_udt_error());
+		return uv__set_sys_error(handle->loop, uv_translate_udt_error());
 
-	udt->connection_cb = cb;
+	handle->connection_cb = cb;
 
 	// associated server io with uv_poll
-	uv_poll_init_socket(udt->loop, &udt->uvpoll, udt->fd);
+	uv_poll_init_socket(handle->loop, &udt->uvpoll, handle->fd);
 	uv_poll_start(&udt->uvpoll, UV_READABLE, uv__server_io);
 
 	// start handle
-	uv__handle_start(stream);
+	uv__handle_start(handle);
 
 	return 0;
 }
 
 
 int uv_udt_connect(uv_connect_t* req,
-                   uv_udt_t* handle,
+                   uv_udt_t* udt,
                    struct sockaddr_in address,
                    uv_connect_cb cb) {
 	int saved_errno = errno;
 	int status;
+	uv_handle_t* handle = (uv_handle_t*)udt;
 
 	if (handle->type != UV_TCP || address.sin_family != AF_INET) {
 		uv__set_artificial_error(handle->loop, UV_EINVAL);
 		return -1;
 	}
 
-	status = uv__connect(req, handle, (struct sockaddr*)&addr, sizeof addr, cb);
+	status = uv__connect(req, handle, (struct sockaddr*)&address, sizeof address, cb);
 
 	errno = saved_errno;
 	return status;
@@ -913,18 +1020,19 @@ int uv_udt_connect(uv_connect_t* req,
 
 
 int uv_udt_connect6(uv_connect_t* req,
-                    uv_udt_t* handle,
+                    uv_udt_t* udt,
                     struct sockaddr_in6 address,
                     uv_connect_cb cb) {
 	int saved_errno = errno;
 	int status;
+	uv_handle_t* handle = (uv_handle_t*)udt;
 
 	if (handle->type != UV_TCP || address.sin6_family != AF_INET6) {
 		uv__set_artificial_error(handle->loop, UV_EINVAL);
 		return -1;
 	}
 
-	status = uv__connect(req, handle, (struct sockaddr*)&addr, sizeof addr, cb);
+	status = uv__connect(req, handle, (struct sockaddr*)&address, sizeof address, cb);
 
 	errno = saved_errno;
 	return status;
@@ -962,7 +1070,7 @@ int uv_udt_read_start(uv_stream_t* stream, uv_alloc_cb alloc_cb,
 
 
 int uv_udt_read_stop(uv_stream_t* stream) {
-	uv_poll_stop(&((uv_udt_t*)stream->uvpoll));
+	uv_poll_stop(&((uv_udt_t*)stream)->uvpoll);
 
 	uv__handle_stop(stream);
 	stream->flags &= ~UV_STREAM_READING;
@@ -1074,7 +1182,9 @@ static void uv__finish_close(uv_handle_t* handle) {
 	}
 }
 
-void uv_udt_close(uv_handle_t* handle, uv_close_cb close_cb) {
+void uv_udt_close(uv_handle_t* udt, uv_close_cb close_cb) {
+	uv_stream_t* handle = (uv_stream_t*)udt;
+
 	// let uv_poll closure call it
 	handle->close_cb = NULL; ///close_cb;
 
@@ -1101,19 +1211,9 @@ void uv_udt_close(uv_handle_t* handle, uv_close_cb close_cb) {
 	uv__finish_close(handle);
 
 	// close uv_poll
-	uv_close(&((uv_udt_t*)handle->uvpoll), close_cb);
+	uv_close(&((uv_udt_t*)handle)->uvpoll, close_cb);
 }
 
-
-inline static void uv__req_init(uv_loop_t* loop,
-                                uv_req_t* req,
-                                uv_req_type type) {
-  loop->counters.req_init++;
-  req->type = type;
-  uv__req_register(loop, req);
-}
-#define uv__req_init(loop, req, type) \
-  uv__req_init((loop), (uv_req_t*)(req), (type))
 
 int uv_udt_write(uv_write_t* req, uv_stream_t* stream,
 		uv_buf_t bufs[], int bufcnt, uv_write_cb cb) {
@@ -1134,7 +1234,7 @@ int uv_udt_write(uv_write_t* req, uv_stream_t* stream,
   req->cb = cb;
   req->handle = stream;
   req->error = 0;
-  req->send_handle = send_handle;
+  req->send_handle = NULL;
   ngx_queue_init(&req->queue);
 
   if (bufcnt <= UV_REQ_BUFSML_SIZE)
@@ -1174,42 +1274,43 @@ int uv_udt_write(uv_write_t* req, uv_stream_t* stream,
 }
 
 
-int uv_udt_nodelay(uv_udt_t* handle, int enable) {
-	if (handle->fd != -1)
+int uv_udt_nodelay(uv_udt_t* udt, int enable) {
+	uv_stream_t* stream = (uv_stream_t*)udt;
+
+	if (stream->fd != -1)
 		return -1;
 
 	if (enable)
-		handle->flags |= UV_TCP_NODELAY;
+		stream->flags |= UV_TCP_NODELAY;
 	else
-		handle->flags &= ~UV_TCP_NODELAY;
+		stream->flags &= ~UV_TCP_NODELAY;
 
 	return 0;
 }
 
 
-int uv_udt_keepalive(uv_udt_t* handle, int enable, unsigned int delay) {
-	if (handle->fd != -1)
+int uv_udt_keepalive(uv_udt_t* udt, int enable, unsigned int delay) {
+	uv_stream_t* stream = (uv_stream_t*)udt;
+
+	if (stream->fd != -1)
 		return -1;
 
 	if (enable)
-		handle->flags |= UV_TCP_KEEPALIVE;
+		stream->flags |= UV_TCP_KEEPALIVE;
 	else
-		handle->flags &= ~UV_TCP_KEEPALIVE;
+		stream->flags &= ~UV_TCP_KEEPALIVE;
 
 	return 0;
 }
 
 
-int uv_udt_setrendez(uv_udt_t* handle, int enable) {
-    int rndz = enable ? 1 : 0;
+int uv_udt_setrendez(uv_udt_t* udt, int enable) {
+	uv_stream_t* stream = (uv_stream_t*)udt;
 
-    if (handle->fd != -1 && udt_setsockopt(handle->udtfd, 0, UDT_UDT_RENDEZVOUS, &rndz, sizeof(rndz)))
-	return -1;
+	int rndz = enable ? 1 : 0;
 
-	if (enable)
-		handle->flags |= UV_UDT_RENDEZ;
-	else
-		handle->flags &= ~UV_UDT_RENDEZ;
+	if (stream->fd != -1 && udt_setsockopt(udt->udtfd, 0, UDT_UDT_RENDEZVOUS, &rndz, sizeof(rndz)))
+		return -1;
 
 	return 0;
 }
@@ -1330,62 +1431,6 @@ int uv_translate_udt_error() {
 	//case ENOMEM: return UV_ENOMEM;
 	default: return errno = -1;
 	}
-}
-
-// UDT socket operation
-int udt__socket(int domain, int type, int protocol) {
-	int sockfd;
-
-	sockfd = udt_socket(domain, type, protocol);
-
-	if (sockfd == -1)
-		goto out;
-
-	if (udt__nonblock(sockfd, 1)) {
-		udt_close(sockfd);
-		sockfd = -1;
-	}
-
-out:
-	return sockfd;
-}
-
-
-int udt__accept(int sockfd) {
-	int peerfd = -1;
-	struct sockaddr_storage saddr;
-	int namelen = sizeof saddr;
-
-	assert(sockfd >= 0);
-
-	if ((peerfd = udt_accept(sockfd, (struct sockaddr *)&saddr, &namelen)) == -1) {
-		return -1;
-	}
-
-	if (udt__nonblock(peerfd, 1)) {
-		udt_close(peerfd);
-		peerfd = -1;
-	}
-
-	///char clienthost[NI_MAXHOST];
-	///char clientservice[NI_MAXSERV];
-
-	///getnameinfo((struct sockaddr*)&saddr, sizeof saddr, clienthost, sizeof(clienthost), clientservice, sizeof(clientservice), NI_NUMERICHOST|NI_NUMERICSERV);
-	///fprintf(stdout, "new connection: %s:%s\n", clienthost, clientservice);
-
-	return peerfd;
-}
-
-
-static int udt__nonblock(int udtfd, int set)
-{
-    int block = (set ? 0 : 1);
-    int rc1, rc2;
-
-    rc1 = udt_setsockopt(udtfd, 0, (int)UDT_UDT_SNDSYN, (void *)&block, sizeof(block));
-    rc2 = udt_setsockopt(udtfd, 0, (int)UDT_UDT_RCVSYN, (void *)&block, sizeof(block));
-
-    return (rc1 | rc2);
 }
 
 #endif // WIN32
