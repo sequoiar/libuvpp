@@ -20,18 +20,22 @@
   ((type *) ((char *) (ptr) - offsetof(type, member)))
 
 // consume UDT Os fd event
-static void udt_consume_osfd(int os_fd)
+inline static void udt_consume_osfd(int os_fd, int once)
 {
 	int saved_errno = errno;
 	char dummy;
 
-	recv(os_fd, &dummy, sizeof(dummy), 0);
+	if (once) {
+		recv(os_fd, &dummy, sizeof(dummy), 0);
+	} else {
+		while(recv(os_fd, &dummy, sizeof(dummy), 0) > 0);
+	}
 
 	errno = saved_errno;
 }
 
 
-static int udt__nonblock(int udtfd, int set)
+inline static int udt__nonblock(int udtfd, int set)
 {
     int block = (set ? 0 : 1);
     int rc1, rc2;
@@ -46,14 +50,14 @@ static int udt__nonblock(int udtfd, int set)
 inline static void uv__req_init(uv_loop_t* loop,
                                 uv_req_t* req,
                                 uv_req_type type) {
-  loop->counters.req_init++;
+  ///loop->counters.req_init++;
   req->type = type;
-  uv__req_register(loop, req);
+  ///uv__req_register(loop, req);
 }
 
 
 // UDT socket operation
-static int udt__socket(int domain, int type, int protocol) {
+inline static int udt__socket(int domain, int type, int protocol) {
 	int sockfd;
 
 	sockfd = udt_socket(domain, type, protocol);
@@ -71,7 +75,7 @@ out:
 }
 
 
-static int udt__accept(int sockfd) {
+inline static int udt__accept(int sockfd) {
 	int peerfd = -1;
 	struct sockaddr_storage saddr;
 	int namelen = sizeof saddr;
@@ -87,11 +91,11 @@ static int udt__accept(int sockfd) {
 		peerfd = -1;
 	}
 
-	///char clienthost[NI_MAXHOST];
-	///char clientservice[NI_MAXSERV];
+	char clienthost[NI_MAXHOST];
+	char clientservice[NI_MAXSERV];
 
-	///getnameinfo((struct sockaddr*)&saddr, sizeof saddr, clienthost, sizeof(clienthost), clientservice, sizeof(clientservice), NI_NUMERICHOST|NI_NUMERICSERV);
-	///fprintf(stdout, "new connection: %s:%s\n", clienthost, clientservice);
+	getnameinfo((struct sockaddr*)&saddr, sizeof saddr, clienthost, sizeof(clienthost), clientservice, sizeof(clientservice), NI_NUMERICHOST|NI_NUMERICSERV);
+	fprintf(stdout, "new connection: %s:%s\n", clienthost, clientservice);
 
 	return peerfd;
 }
@@ -102,10 +106,12 @@ static int udt__accept(int sockfd) {
  * In order to determine if we've errored out or succeeded must call
  * getsockopt.
  */
-static void uv__stream_connect(uv_stream_t* stream) {
+inline static void uv__stream_connect(uv_stream_t* stream) {
   int error;
   uv_connect_t* req = stream->connect_req;
   socklen_t errorsize = sizeof(int);
+
+  printf("%s.%d\n", __FUNCTION__, __LINE__);
 
   assert(stream->type == UV_TCP);
   assert(req);
@@ -139,16 +145,18 @@ static void uv__stream_connect(uv_stream_t* stream) {
     return;
 
   stream->connect_req = NULL;
-  uv__req_unregister(stream->loop, req);
+  ///uv__req_unregister(stream->loop, req);
 
   if (req->cb) {
+	  printf("%s.%d\n", __FUNCTION__, __LINE__);
+
     uv__set_sys_error(stream->loop, error);
     req->cb(req, error ? -1 : 0);
   }
 }
 
 
-static size_t uv__buf_count(uv_buf_t bufs[], int bufcnt) {
+inline static size_t uv__buf_count(uv_buf_t bufs[], int bufcnt) {
   size_t total = 0;
   int i;
 
@@ -161,7 +169,7 @@ static size_t uv__buf_count(uv_buf_t bufs[], int bufcnt) {
 
 
 // write process
-static uv_write_t* uv_write_queue_head(uv_stream_t* stream) {
+inline static uv_write_t* uv_write_queue_head(uv_stream_t* stream) {
   ngx_queue_t* q;
   uv_write_t* req;
 
@@ -180,7 +188,7 @@ static uv_write_t* uv_write_queue_head(uv_stream_t* stream) {
   return req;
 }
 
-static void uv__drain(uv_stream_t* stream) {
+inline static void uv__drain(uv_stream_t* stream) {
   uv_shutdown_t* req;
 
   assert(!uv_write_queue_head(stream));
@@ -194,10 +202,10 @@ static void uv__drain(uv_stream_t* stream) {
 
 	  req = stream->shutdown_req;
 	  stream->shutdown_req = NULL;
-	  uv__req_unregister(stream->loop, req);
+	  ///uv__req_unregister(stream->loop, req);
 
 	  // clear pending Os fd event
-	  udt_consume_osfd(((uv_udt_t *)stream)->tcp.fd);
+	  udt_consume_osfd(((uv_udt_t *)stream)->tcp.fd, 0);
 
 	  if (udt_close(((uv_udt_t *)stream)->udtfd)) {
 		  /* Error. Report it. User should call uv_close(). */
@@ -215,7 +223,7 @@ static void uv__drain(uv_stream_t* stream) {
   }
 }
 
-static size_t uv__write_req_size(uv_write_t* req) {
+inline static size_t uv__write_req_size(uv_write_t* req) {
   size_t size;
 
   size = uv__buf_count(req->bufs + req->write_index,
@@ -225,7 +233,7 @@ static size_t uv__write_req_size(uv_write_t* req) {
   return size;
 }
 
-static void uv__write_req_finish(uv_write_t* req) {
+inline static void uv__write_req_finish(uv_write_t* req) {
   uv_stream_t* stream = req->handle;
 
   /* Pop the req off tcp->write_queue. */
@@ -378,7 +386,7 @@ start:
 }
 
 
-static void uv__write_callbacks(uv_stream_t* stream) {
+inline static void uv__write_callbacks(uv_stream_t* stream) {
   uv_write_t* req;
   ngx_queue_t* q;
 
@@ -387,7 +395,7 @@ static void uv__write_callbacks(uv_stream_t* stream) {
     q = ngx_queue_head(&stream->write_completed_queue);
     req = ngx_queue_data(q, uv_write_t, queue);
     ngx_queue_remove(q);
-    uv__req_unregister(stream->loop, req);
+    ///uv__req_unregister(stream->loop, req);
 
     /* NOTE: call callback AFTER freeing the request data. */
     if (req->cb) {
@@ -519,14 +527,16 @@ static void uv__read(uv_stream_t* stream) {
 }
 
 
-static void uv__stream_io(uv_poll_t* handle, int status, int events) {
+inline static void uv__stream_io(uv_poll_t* handle, int status, int events) {
 	uv_udt_t* udt = container_of(handle, uv_udt_t, uvpoll);
 	uv_stream_t* stream = (uv_stream_t*)udt;
 
 
+	///printf("%s.%d\n", __FUNCTION__, __LINE__);
+
 	// !!! always consume UDT/OSfd event here
 	if (stream->fd >= 0) {
-	  udt_consume_osfd(stream->fd);
+	  udt_consume_osfd(stream->fd, 1);
 	}
 
 	if (status == 0) {
@@ -537,8 +547,12 @@ static void uv__stream_io(uv_poll_t* handle, int status, int events) {
 		assert(!(stream->flags & UV_CLOSING));
 
 		if (stream->connect_req) {
+			///printf("%s.%d\n", __FUNCTION__, __LINE__);
+
 			uv__stream_connect(stream);
 		} else {
+			///printf("%s.%d\n", __FUNCTION__, __LINE__);
+
 			assert(stream->fd >= 0);
 
 			// check UDT event
@@ -567,7 +581,7 @@ static void uv__stream_io(uv_poll_t* handle, int status, int events) {
 }
 
 
-static int maybe_new_socket(uv_udt_t* udt, int domain, int flags) {
+inline static int maybe_new_socket(uv_udt_t* udt, int domain, int flags) {
 	int optlen;
 	uv_stream_t* stream = (uv_stream_t*)udt;
 
@@ -585,13 +599,13 @@ static int maybe_new_socket(uv_udt_t* udt, int domain, int flags) {
 
 	// Associate stream io with uv_poll
 	uv_poll_init_socket(stream->loop, &udt->uvpoll, stream->fd);
-	uv_poll_start(&udt->uvpoll, UV_READABLE, uv__stream_io);
+	///uv_poll_start(&udt->uvpoll, UV_READABLE, uv__stream_io);
 
 	return 0;
 }
 
 
-static int uv__bind(
+inline static int uv__bind(
 		uv_udt_t* udt,
 		int domain,
 		struct sockaddr* addr,
@@ -626,7 +640,7 @@ out:
 }
 
 
-static int uv__connect(uv_connect_t* req,
+inline static int uv__connect(uv_connect_t* req,
                        uv_udt_t* udt,
                        struct sockaddr* addr,
                        socklen_t addrlen,
@@ -675,6 +689,7 @@ static int uv__connect(uv_connect_t* req,
   ngx_queue_init(&req->queue);
   stream->connect_req = req;
 
+  uv_poll_start(&udt->uvpoll, UV_READABLE, uv__stream_io);
   ///uv__io_start(handle->loop, &handle->write_watcher);
 
   ///if (handle->delayed_error)
@@ -685,7 +700,7 @@ static int uv__connect(uv_connect_t* req,
 
 
 // binding on existing udp socket/fd ///////////////////////////////////////////
-static int uv__bindfd(
+inline static int uv__bindfd(
     	uv_udt_t* udt,
     	uv_os_sock_t udpfd)
 {
@@ -869,14 +884,14 @@ out:
 }
 
 
-static void uv__server_io(uv_poll_t* handle, int status, int events) {
+inline static void uv__server_io(uv_poll_t* handle, int status, int events) {
 	uv_udt_t* udt = container_of(handle, uv_udt_t, uvpoll);
 	uv_stream_t* stream = (uv_stream_t*)udt;
 
 
 	// !!! always consume UDT/OSfd event here
 	if (stream->fd >= 0) {
-		udt_consume_osfd(stream->fd);
+		udt_consume_osfd(stream->fd, 1);
 	}
 
 	if (status == 0) {
@@ -898,7 +913,7 @@ static void uv__server_io(uv_poll_t* handle, int status, int events) {
 
 			udtfd = udt__accept(udt->udtfd);
 			if (udtfd < 0) {
-				///fprintf(stdout, "func:%s, line:%d, errno: %d, %s\n", __FUNCTION__, __LINE__, udt_getlasterror_code(), udt_getlasterror_desc());
+				fprintf(stdout, "func:%s, line:%d, errno: %d, %s\n", __FUNCTION__, __LINE__, udt_getlasterror_code(), udt_getlasterror_desc());
 
 				if (udt_getlasterror_code() == UDT_EASYNCRCV /*errno == EAGAIN || errno == EWOULDBLOCK*/) {
 					/* No problem. */
@@ -989,11 +1004,11 @@ int uv_udt_listen(uv_stream_t* handle, int backlog, uv_connection_cb cb) {
 	handle->connection_cb = cb;
 
 	// associated server io with uv_poll
-	uv_poll_init_socket(handle->loop, &udt->uvpoll, handle->fd);
+	///uv_poll_init_socket(handle->loop, &udt->uvpoll, handle->fd);
 	uv_poll_start(&udt->uvpoll, UV_READABLE, uv__server_io);
 
 	// start handle
-	uv__handle_start(handle);
+	///uv__handle_start(handle);
 
 	return 0;
 }
@@ -1063,7 +1078,7 @@ int uv_udt_read_start(uv_stream_t* stream, uv_alloc_cb alloc_cb,
 	stream->read_cb = read_cb;
 	stream->alloc_cb = alloc_cb;
 
-	uv__handle_start(stream);
+	///uv__handle_start(stream);
 
 	return 0;
 }
@@ -1072,7 +1087,7 @@ int uv_udt_read_start(uv_stream_t* stream, uv_alloc_cb alloc_cb,
 int uv_udt_read_stop(uv_stream_t* stream) {
 	uv_poll_stop(&((uv_udt_t*)stream)->uvpoll);
 
-	uv__handle_stop(stream);
+	///uv__handle_stop(stream);
 	stream->flags &= ~UV_STREAM_READING;
 	stream->read_cb = NULL;
 	stream->alloc_cb = NULL;
@@ -1092,26 +1107,26 @@ int uv_udt_is_writable(const uv_stream_t* stream) {
 
 // shutdown process
 int uv_udt_shutdown(uv_shutdown_t* req, uv_stream_t* stream, uv_shutdown_cb cb) {
-  assert((stream->type == UV_TCP) &&
-         "uv_shutdown (unix) only supports uv_handle_t right now");
-  assert(stream->fd >= 0);
+	assert((stream->type == UV_TCP) &&
+			"uv_shutdown (unix) only supports uv_handle_t right now");
+	assert(stream->fd >= 0);
 
-  if (!(stream->flags & UV_STREAM_WRITABLE) ||
-      stream->flags & UV_STREAM_SHUT ||
-      stream->flags & UV_CLOSED ||
-      stream->flags & UV_CLOSING) {
-    uv__set_artificial_error(stream->loop, UV_ENOTCONN);
-    return -1;
-  }
+	if (!(stream->flags & UV_STREAM_WRITABLE) ||
+		stream->flags & UV_STREAM_SHUT ||
+		stream->flags & UV_CLOSED ||
+		stream->flags & UV_CLOSING) {
+		uv__set_artificial_error(stream->loop, UV_ENOTCONN);
+		return -1;
+	}
 
-  /* Initialize request */
-  uv__req_init(stream->loop, req, UV_SHUTDOWN);
-  req->handle = stream;
-  req->cb = cb;
-  stream->shutdown_req = req;
-  stream->flags |= UV_STREAM_SHUTTING;
+	/* Initialize request */
+	uv__req_init(stream->loop, req, UV_SHUTDOWN);
+	req->handle = stream;
+	req->cb = cb;
+	stream->shutdown_req = req;
+	stream->flags |= UV_STREAM_SHUTTING;
 
-  return 0;
+	return 0;
 }
 
 
@@ -1123,7 +1138,7 @@ static void uv__stream_destroy(uv_stream_t* stream) {
   assert(stream->flags & UV_CLOSED);
 
   if (stream->connect_req) {
-    uv__req_unregister(stream->loop, stream->connect_req);
+    ///uv__req_unregister(stream->loop, stream->connect_req);
     uv__set_artificial_error(stream->loop, UV_EINTR);
     stream->connect_req->cb(stream->connect_req, -1);
     stream->connect_req = NULL;
@@ -1134,7 +1149,7 @@ static void uv__stream_destroy(uv_stream_t* stream) {
     ngx_queue_remove(q);
 
     req = ngx_queue_data(q, uv_write_t, queue);
-    uv__req_unregister(stream->loop, req);
+    ///uv__req_unregister(stream->loop, req);
 
     if (req->bufs != req->bufsml)
       free(req->bufs);
@@ -1150,7 +1165,7 @@ static void uv__stream_destroy(uv_stream_t* stream) {
     ngx_queue_remove(q);
 
     req = ngx_queue_data(q, uv_write_t, queue);
-    uv__req_unregister(stream->loop, req);
+    ///uv__req_unregister(stream->loop, req);
 
     if (req->cb) {
       uv__set_sys_error(stream->loop, req->error);
@@ -1159,7 +1174,7 @@ static void uv__stream_destroy(uv_stream_t* stream) {
   }
 
   if (stream->shutdown_req) {
-    uv__req_unregister(stream->loop, stream->shutdown_req);
+    ///uv__req_unregister(stream->loop, stream->shutdown_req);
     uv__set_artificial_error(stream->loop, UV_EINTR);
     stream->shutdown_req->cb(stream->shutdown_req, -1);
     stream->shutdown_req = NULL;
@@ -1167,14 +1182,14 @@ static void uv__stream_destroy(uv_stream_t* stream) {
 }
 
 static void uv__finish_close(uv_handle_t* handle) {
-	assert(!uv__is_active(handle));
+	///assert(!uv__is_active(handle));
 	assert(handle->flags & UV_CLOSING);
 	assert(!(handle->flags & UV_CLOSED));
 	handle->flags |= UV_CLOSED;
 
 	uv__stream_destroy((uv_stream_t*)handle);
 
-	uv__handle_unref(handle);
+	///uv__handle_unref(handle);
 	ngx_queue_remove(&handle->handle_queue);
 
 	if (handle->close_cb) {
@@ -1186,12 +1201,12 @@ void uv_udt_close(uv_handle_t* udt, uv_close_cb close_cb) {
 	uv_stream_t* handle = (uv_stream_t*)udt;
 
 	// let uv_poll closure call it
-	handle->close_cb = NULL; ///close_cb;
+	handle->close_cb = close_cb;
 
 	uv_udt_read_stop(handle);
 
 	// clear pending Os fd event
-	udt_consume_osfd(handle->fd);
+	udt_consume_osfd(handle->fd, 0);
 
 	udt_close(((uv_udt_t *)handle)->udtfd);
 
@@ -1199,7 +1214,7 @@ void uv_udt_close(uv_handle_t* udt, uv_close_cb close_cb) {
 
 	if (handle->accepted_fd >= 0) {
 		// clear pending Os fd event
-		udt_consume_osfd(handle->accepted_fd);
+		udt_consume_osfd(handle->accepted_fd, 0);
 
 		udt_close(((uv_udt_t *)handle)->accepted_udtfd);
 		handle->accepted_fd = -1;
@@ -1211,7 +1226,7 @@ void uv_udt_close(uv_handle_t* udt, uv_close_cb close_cb) {
 	uv__finish_close(handle);
 
 	// close uv_poll
-	uv_close(&((uv_udt_t*)handle)->uvpoll, close_cb);
+	uv_close(&((uv_udt_t*)handle)->uvpoll, NULL);
 }
 
 
@@ -1219,23 +1234,32 @@ int uv_udt_write(uv_write_t* req, uv_stream_t* stream,
 		uv_buf_t bufs[], int bufcnt, uv_write_cb cb) {
   int empty_queue;
 
+  ///printf("%s.%d\n", __FUNCTION__, __LINE__);
+
   assert((stream->type == UV_TCP) &&
       "uv_write (unix) does not yet support other types of streams");
+
+  ///printf("%s.%d\n", __FUNCTION__, __LINE__);
 
   if (stream->fd < 0) {
     uv__set_sys_error(stream->loop, EBADF);
     return -1;
   }
 
+  ///printf("%s.%d\n", __FUNCTION__, __LINE__);
+
   empty_queue = (stream->write_queue_size == 0);
 
   /* Initialize the req */
   uv__req_init(stream->loop, req, UV_WRITE);
+  ///printf("%s.%d\n", __FUNCTION__, __LINE__);
+
   req->cb = cb;
   req->handle = stream;
   req->error = 0;
-  req->send_handle = NULL;
   ngx_queue_init(&req->queue);
+
+  ///printf("%s.%d\n", __FUNCTION__, __LINE__);
 
   if (bufcnt <= UV_REQ_BUFSML_SIZE)
     req->bufs = req->bufsml;
@@ -1258,6 +1282,7 @@ int uv_udt_write(uv_write_t* req, uv_stream_t* stream,
     /* Still connecting, do nothing. */
   }
   else if (empty_queue) {
+	  ///printf("%s.%d\n", __FUNCTION__, __LINE__);
     uv__write(stream);
   }
   else {
@@ -1268,6 +1293,7 @@ int uv_udt_write(uv_write_t* req, uv_stream_t* stream,
      */
     assert(!(stream->flags & UV_STREAM_BLOCKING));
     ///uv__io_start(stream->loop, &stream->write_watcher);
+    printf("%s.%d\n", __FUNCTION__, __LINE__);
   }
 
   return 0;

@@ -434,13 +434,14 @@
     },
 
     {
-      'target_name': 'echo-server-udt',
+      'target_name': 'echo-server-uvudt',
       'type': 'executable',
       'dependencies': [ 'uv' ],
       'sources': [
-        'test/echo-server-udt.c',
+        'test/echo-server-uvudt.c',
         'test/runner.h',
         'test/task.h',
+        'uvudt/uvudt.h',
 	  ],
       'conditions': [
         [ 'OS=="win"', {
@@ -463,13 +464,14 @@
 	},
 
 	{
-      'target_name': 'echo-client-udt',
+      'target_name': 'echo-client-uvudt',
       'type': 'executable',
       'dependencies': [ 'uv' ],
       'sources': [
-        'test/echo-client-udt.c',
+        'test/echo-client-uvudt.c',
         'test/runner.h',
         'test/task.h',
+        'uvudt/uvudt.h',
 	  ],
       'conditions': [
         [ 'OS=="win"', {
