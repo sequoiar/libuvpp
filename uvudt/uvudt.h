@@ -4,13 +4,12 @@
 #ifndef UVUDT_H
 #define UVUDT_H
 
+#include "uv.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "uv.h"
-
-
+	
 /* flags */
 enum {
   UV_CLOSING          = 0x01,   /* uv_close() called but not finished. */
@@ -22,31 +21,12 @@ enum {
   UV_STREAM_WRITABLE  = 0x40,   /* The stream is writable */
   UV_STREAM_BLOCKING  = 0x80,   /* Synchronous writes. */
   UV_TCP_NODELAY      = 0x100,  /* Disable Nagle. */
-  UV_TCP_KEEPALIVE    = 0x200   /* Turn on keep-alive. */
+  UV_TCP_KEEPALIVE    = 0x200,  /* Turn on keep-alive. */
+  UV_LISTENING        = 0x400,  /* uv_listen() called. */
 };
 
 
-#if defined(__unix__) || defined(__POSIX__) || defined(__APPLE__)
-// Unix-like platform
-
-/*
- * uv_udt_t is a subclass of uv_stream_t
- *
- * Represents a UDT stream or UDT server.
- */
-#define UV_UDT_PRIVATE_FIELDS           \
-    int udtfd;                          \
-    int accepted_udtfd;                 \
-
-
-#define UV_UDT_WRITE_PRIVATE_FIELDS     \
-    // empty
-
-
-#define UV_UDT_CONNECT_PRIVATE_FIELDS   \
-    // empty
-
-#else
+#if defined(WIN32)
 // Windows platform
 
 /*
@@ -81,12 +61,33 @@ enum {
 #define UV_UDT_CONNECT_PRIVATE_FIELDS   \
 	ngx_queue_t queue;
 
+#else defined(__unix__) || defined(__POSIX__) || defined(__APPLE__)
+// Unix-like platform
+
+/*
+ * uv_udt_t is a subclass of uv_stream_t
+ *
+ * Represents a UDT stream or UDT server.
+ */
+#define UV_UDT_PRIVATE_FIELDS           \
+    int udtfd;                          \
+    int accepted_udtfd;                 \
+
+
+#define UV_UDT_WRITE_PRIVATE_FIELDS     \
+    // empty
+
+
+#define UV_UDT_CONNECT_PRIVATE_FIELDS   \
+    // empty
+
 
 // Android platform
 // TBD...
 
 // iOS platform
 // TBD...
+
 #endif
 
 

@@ -39,12 +39,13 @@ static int udt__nonblock(int udtfd, int set)
 }
 
 
-static void uv__req_init(uv_loop_t* loop,
-                                uv_req_t* req,
-                                uv_req_type type) {
-  ///loop->counters.req_init++;
-  req->type = type;
-  ///uv__req_register(loop, req);
+static void uv__req_init(
+		uv_loop_t* loop,
+		uv_req_t* req,
+		uv_req_type type) {
+	loop->counters.req_init++;
+	req->type = type;
+	///uv__req_register(loop, req);
 }
 
 
@@ -491,7 +492,8 @@ static void uv__read(uv_stream_t* stream) {
 				return;
 			} else {
 				/* Error. User should call uv_close(). */
-				uv__set_sys_error(stream->loop, udterr);
+				///uv__set_sys_error(stream->loop, udterr);
+				uv__set_artificial_error(stream->loop, UV_EOF);
 
 				uv_poll_stop(&udt->uvpoll);
 				///if (!uv__io_active(&stream->write_watcher))
@@ -581,6 +583,7 @@ static void uv__stream_io(uv_poll_t* handle, int status, int events) {
 		}
 	} else {
 		// error check
+		printf("%s.%d\n", __FUNCTION__, __LINE__);
 	}
 }
 
@@ -797,7 +800,7 @@ int uv_udt_bind(uv_udt_t* udt, struct sockaddr_in addr) {
 	}
 
 	return uv__bind(
-			handle,
+			udt,
 			AF_INET,
 			(struct sockaddr*)&addr,
 			sizeof(struct sockaddr_in));
@@ -813,7 +816,7 @@ int uv_udt_bind6(uv_udt_t* udt, struct sockaddr_in6 addr) {
 	}
 
 	return uv__bind(
-			handle,
+			udt,
 			AF_INET6,
 			(struct sockaddr*)&addr,
 			sizeof(struct sockaddr_in6));
@@ -948,6 +951,7 @@ static void uv__server_io(uv_poll_t* handle, int status, int events) {
 	} else {
 		// error check
 		// TBD...
+		printf("%s.%d\n", __FUNCTION__, __LINE__);
 		return;
 	}
 }
@@ -977,10 +981,13 @@ int uv_udt_accept(uv_stream_t* streamServer, uv_stream_t* streamClient) {
 
 	// Associate stream io with uv_poll
 	uv_poll_init_socket(streamClient->loop, &udtClient->uvpoll, udtClient->fd);
-	uv_poll_start(&udtClient->uvpoll, UV_READABLE, uv__stream_io);
+	///uv_poll_start(&udtClient->uvpoll, UV_READABLE, uv__stream_io);
 
 	udtServer->accepted_fd = INVALID_SOCKET;
 	status = 0;
+
+	// Increase tcp stream
+	///streamClient->loop->active_tcp_streams++;
 
 out:
 	return status;
@@ -1076,6 +1083,7 @@ int uv_udt_read_start(uv_stream_t* stream, uv_alloc_cb alloc_cb,
 	stream->alloc_cb = alloc_cb;
 
 	///uv__handle_start(stream);
+	uv_poll_start(&udt->uvpoll, UV_READABLE, uv__stream_io);
 
 	return 0;
 }
@@ -1210,18 +1218,27 @@ void uv_udt_close(uv_handle_t* handle, uv_close_cb close_cb) {
 	// stop stream
 	uv_udt_read_stop((uv_stream_t*)handle);
 
+	// close udt socket
+	udt_close(udt->udtfd);
+
 	// clear pending Os fd event
 	udt_consume_osfd(udt->fd, 0);
 
-	udt_close(udt->udtfd);
+	// close Os fd
+	closesocket(udt->fd);
 
 	udt->fd = INVALID_SOCKET;
 
 	if (udt->accepted_fd >= 0) {
+		// close udt socket
+		udt_close(udt->accepted_udtfd);
+
 		// clear pending Os fd event
 		udt_consume_osfd(udt->accepted_fd, 0);
 
-		udt_close(udt->accepted_udtfd);
+		// close Os fd
+		closesocket(udt->accepted_fd);
+
 		udt->accepted_fd = INVALID_SOCKET;
 	}
 
@@ -1231,7 +1248,6 @@ void uv_udt_close(uv_handle_t* handle, uv_close_cb close_cb) {
 	uv__finish_close(handle);
 
 	// close uv_poll
-	// windows will process closure automatically
 	///uv_close(&udt->uvpoll, NULL);
 }
 

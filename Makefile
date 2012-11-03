@@ -24,7 +24,7 @@ ifdef MSVC
 uname_S := MINGW
 endif
 
-CPPFLAGS += -Iinclude -Iinclude/uv-private -Isrc/UDT4/src -DLINUX -DEVPIPE_OSFD -Iuvudt 
+CPPFLAGS += -Iinclude -Iinclude/uv-private -Iuvudt/dep/UDT4/src -DLINUX -DEVPIPE_OSFD -Iuvudt 
 
 CARES_OBJS =
 CARES_OBJS += src/ares/ares__close_sockets.o
@@ -72,20 +72,20 @@ CARES_OBJS += src/ares/inet_net_pton.o
 CARES_OBJS += src/ares/inet_ntop.o
 
 UDT_OBJS =
-UDT_OBJS += src/UDT4/src/api.o
-UDT_OBJS += src/UDT4/src/buffer.o
-UDT_OBJS += src/UDT4/src/cache.o
-UDT_OBJS += src/UDT4/src/ccc.o
-UDT_OBJS += src/UDT4/src/channel.o
-UDT_OBJS += src/UDT4/src/common.o
-UDT_OBJS += src/UDT4/src/udt_core.o
-UDT_OBJS += src/UDT4/src/epoll.o
-UDT_OBJS += src/UDT4/src/list.o
-UDT_OBJS += src/UDT4/src/md5.o
-UDT_OBJS += src/UDT4/src/packet.o
-UDT_OBJS += src/UDT4/src/queue.o
-UDT_OBJS += src/UDT4/src/udtc.o
-UDT_OBJS += src/UDT4/src/window.o
+UDT_OBJS += uvudt/dep/UDT4/src/api.o
+UDT_OBJS += uvudt/dep/UDT4/src/buffer.o
+UDT_OBJS += uvudt/dep/UDT4/src/cache.o
+UDT_OBJS += uvudt/dep/UDT4/src/ccc.o
+UDT_OBJS += uvudt/dep/UDT4/src/channel.o
+UDT_OBJS += uvudt/dep/UDT4/src/common.o
+UDT_OBJS += uvudt/dep/UDT4/src/udt_core.o
+UDT_OBJS += uvudt/dep/UDT4/src/epoll.o
+UDT_OBJS += uvudt/dep/UDT4/src/list.o
+UDT_OBJS += uvudt/dep/UDT4/src/md5.o
+UDT_OBJS += uvudt/dep/UDT4/src/packet.o
+UDT_OBJS += uvudt/dep/UDT4/src/queue.o
+UDT_OBJS += uvudt/dep/UDT4/src/udtc.o
+UDT_OBJS += uvudt/dep/UDT4/src/window.o
 
 ifneq (,$(findstring MINGW,$(uname_S)))
 include config-mingw.mk

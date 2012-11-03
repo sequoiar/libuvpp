@@ -159,7 +159,8 @@ src/unix/uv-eio.o: src/unix/uv-eio.c
 
 clean-platform:
 	-rm -f src/ares/*.o
-	-rm -f src/UDT4/src/*.o
+	-rm -f uvudt/dep/UDT4/src/*.o
+	-rm -f uvudt/*.o
 	-rm -f src/unix/*.o
 	-rm -f src/unix/ev/*.o
 	-rm -f src/unix/eio/*.o
@@ -168,7 +169,8 @@ clean-platform:
 
 distclean-platform:
 	-rm -f src/ares/*.o
-	-rm -f src/UDT4/src/*.o
+	-rm -f uvudt/dep/UDT4/src/*.o
+	-rm -f uvudt/*.o
 	-rm -f src/unix/*.o
 	-rm -f src/unix/ev/*.o
 	-rm -f src/unix/eio/*.o

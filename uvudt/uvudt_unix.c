@@ -1341,6 +1341,7 @@ int uv_udt_setrendez(uv_udt_t* udt, int enable) {
 }
 
 
+// udt error translation to syserr in unix-like
 /*
     case 0: return UV_OK;
     case EIO: return UV_EIO;
