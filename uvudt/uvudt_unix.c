@@ -1,7 +1,4 @@
 // Copyright tom zhou<zs68j2ee@gmail.com>, 2012.
-
-#ifndef WIN32
-
 #include "uvudt.h"
 
 #include "udtc.h"
@@ -95,7 +92,7 @@ inline static int udt__accept(int sockfd) {
 	char clientservice[NI_MAXSERV];
 
 	getnameinfo((struct sockaddr*)&saddr, sizeof saddr, clienthost, sizeof(clienthost), clientservice, sizeof(clientservice), NI_NUMERICHOST|NI_NUMERICSERV);
-	fprintf(stdout, "new connection: %s:%s\n", clienthost, clientservice);
+	printf("new connection: %s:%s\n", clienthost, clientservice);
 
 	return peerfd;
 }
@@ -190,6 +187,8 @@ inline static uv_write_t* uv_write_queue_head(uv_stream_t* stream) {
 
 inline static void uv__drain(uv_stream_t* stream) {
   uv_shutdown_t* req;
+  uv_udt_t* udt = (uv_udt_t*)stream;
+
 
   assert(!uv_write_queue_head(stream));
   assert(stream->write_queue_size == 0);
@@ -205,9 +204,9 @@ inline static void uv__drain(uv_stream_t* stream) {
 	  ///uv__req_unregister(stream->loop, req);
 
 	  // clear pending Os fd event
-	  udt_consume_osfd(((uv_udt_t *)stream)->tcp.fd, 0);
+	  udt_consume_osfd(udt->stream.fd, 0);
 
-	  if (udt_close(((uv_udt_t *)stream)->udtfd)) {
+	  if (udt_close(udt->udtfd)) {
 		  /* Error. Report it. User should call uv_close(). */
 		  uv__set_sys_error(stream->loop, uv_translate_udt_error());
 		  if (req->cb) {
@@ -215,7 +214,7 @@ inline static void uv__drain(uv_stream_t* stream) {
 		  }
 	  } else {
 		  uv__set_sys_error(stream->loop, 0);
-		  ((uv_handle_t*) stream)->flags |= UV_STREAM_SHUT;
+		  stream->flags |= UV_STREAM_SHUT;
 		  if (req->cb) {
 			  req->cb(req, 0);
 		  }
@@ -259,6 +258,8 @@ static void uv__write(uv_stream_t* stream) {
   struct iovec* iov;
   int iovcnt;
   ssize_t n;
+  uv_udt_t* udt = (uv_udt_t*)stream;
+
 
   if (stream->flags & UV_CLOSING) {
     /* Handle was closed this tick. We've received a stale
@@ -298,7 +299,7 @@ start:
 	  for (it = 0; it < iovcnt; it ++) {
 		  size_t ilen = 0;
 		  while (ilen < iov[it].iov_len) {
-			  int rc = udt_send(((uv_udt_t*)stream)->udtfd, ((char *)iov[it].iov_base)+ilen, iov[it].iov_len-ilen, 0);
+			  int rc = udt_send(udt->udtfd, ((char *)iov[it].iov_base)+ilen, iov[it].iov_len-ilen, 0);
 			  if (rc < 0) {
 				  next = 0;
 				  break;
@@ -314,7 +315,7 @@ start:
 
   if (n < 0) {
 	  //static int wcnt = 0;
-	  //fprintf(stdout, "func:%s, line:%d, rcnt: %d\n", __FUNCTION__, __LINE__, wcnt ++);
+	  //printf("func:%s, line:%d, rcnt: %d\n", __FUNCTION__, __LINE__, wcnt ++);
 
 	  if (udt_getlasterror_code() != UDT_EASYNCSND) {
 		  /* Error */
@@ -420,6 +421,8 @@ static void uv__read(uv_stream_t* stream) {
 	struct cmsghdr* cmsg;
 	char cmsg_space[64];
 	int count;
+	uv_udt_t* udt = (uv_udt_t*)stream;
+
 
 	/* Prevent loop starvation when the data comes in as fast as (or faster than)
 	 * we can read it. XXX Need to rearm fd if we switch to edge-triggered I/O.
@@ -441,8 +444,8 @@ static void uv__read(uv_stream_t* stream) {
 
 		// udt recv
 		if (stream->read_cb) {
-			nread = udt_recv(((uv_udt_t *)stream)->udtfd, buf.base, buf.len, 0);
-			///fprintf(stdout, "func:%s, line:%d, expect rd: %d, real rd: %d\n", __FUNCTION__, __LINE__, buf.len, nread);
+			nread = udt_recv(udt->udtfd, buf.base, buf.len, 0);
+			///printf("func:%s, line:%d, expect rd: %d, real rd: %d\n", __FUNCTION__, __LINE__, buf.len, nread);
 		} else {
 			// never support recvmsg on udt for now
 			assert(0);
@@ -473,7 +476,7 @@ static void uv__read(uv_stream_t* stream) {
 
 				/* EOF */
 				uv__set_artificial_error(stream->loop, UV_EOF);
-				uv_poll_stop(&((uv_udt_t*)stream)->uvpoll);
+				uv_poll_stop(&udt->uvpoll);
 				///if (!uv__io_active(&stream->write_watcher))
 				///	uv__handle_stop(stream);
 
@@ -488,7 +491,7 @@ static void uv__read(uv_stream_t* stream) {
 				/* Error. User should call uv_close(). */
 				uv__set_sys_error(stream->loop, udterr);
 
-				uv_poll_stop(&((uv_udt_t*)stream)->uvpoll);
+				uv_poll_stop(&udt->uvpoll);
 				///if (!uv__io_active(&stream->write_watcher))
 				///	uv__handle_stop(stream);
 
@@ -733,15 +736,12 @@ inline static int uv__bindfd(
 		// fill Osfd
 		assert(udt_getsockopt(udt->udtfd, 0, (int)UDT_UDT_OSFD, &stream->fd, &optlen) == 0);
 
-		if (uv__stream_open(
-				udt,
-				stream->fd,
-				UV_READABLE | UV_WRITABLE)) {
-			udt_close(udt->udtfd);
-			stream->fd = -1;
-			status = -2;
-			goto out;
-		}
+		// enable read and write
+		stream->flags |= (UV_STREAM_READABLE|UV_STREAM_WRITABLE);
+
+		// Associate stream io with uv_poll
+		uv_poll_init_socket(stream->loop, &udt->uvpoll, stream->fd);
+		///uv_poll_start(&udt->uvpoll, UV_READABLE, uv__stream_io);
 	}
 
 	assert(stream->fd >= 0);
@@ -913,7 +913,7 @@ inline static void uv__server_io(uv_poll_t* handle, int status, int events) {
 
 			udtfd = udt__accept(udt->udtfd);
 			if (udtfd < 0) {
-				fprintf(stdout, "func:%s, line:%d, errno: %d, %s\n", __FUNCTION__, __LINE__, udt_getlasterror_code(), udt_getlasterror_desc());
+				printf("func:%s, line:%d, errno: %d, %s\n", __FUNCTION__, __LINE__, udt_getlasterror_code(), udt_getlasterror_desc());
 
 				if (udt_getlasterror_code() == UDT_EASYNCRCV /*errno == EAGAIN || errno == EWOULDBLOCK*/) {
 					/* No problem. */
@@ -978,7 +978,7 @@ int uv_udt_accept(uv_stream_t* server, uv_stream_t* client) {
 
 	// Associate stream io with uv_poll
 	uv_poll_init_socket(streamClient->loop, &udtClient->uvpoll, streamClient->fd);
-	uv_poll_start(&udtClient->uvpoll, UV_READABLE, uv__stream_io);
+	///uv_poll_start(&udtClient->uvpoll, UV_READABLE, uv__stream_io);
 
 	streamServer->accepted_fd = -1;
 	status = 0;
@@ -1079,6 +1079,7 @@ int uv_udt_read_start(uv_stream_t* stream, uv_alloc_cb alloc_cb,
 	stream->alloc_cb = alloc_cb;
 
 	///uv__handle_start(stream);
+	uv_poll_start(&((uv_udt_t*)stream)->uvpoll, UV_READABLE, uv__stream_io);
 
 	return 0;
 }
@@ -1200,9 +1201,11 @@ static void uv__finish_close(uv_handle_t* handle) {
 void uv_udt_close(uv_handle_t* udt, uv_close_cb close_cb) {
 	uv_stream_t* handle = (uv_stream_t*)udt;
 
-	// let uv_poll closure call it
+
+    // hook close callback
 	handle->close_cb = close_cb;
 
+	// stop stream
 	uv_udt_read_stop(handle);
 
 	// clear pending Os fd event
@@ -1225,7 +1228,7 @@ void uv_udt_close(uv_handle_t* udt, uv_close_cb close_cb) {
 	// finish it immedietly
 	uv__finish_close(handle);
 
-	// close uv_poll
+	// close uv_poll obviously
 	uv_close(&((uv_udt_t*)handle)->uvpoll, NULL);
 }
 
@@ -1303,8 +1306,6 @@ int uv_udt_write(uv_write_t* req, uv_stream_t* stream,
 int uv_udt_nodelay(uv_udt_t* udt, int enable) {
 	uv_stream_t* stream = (uv_stream_t*)udt;
 
-	if (stream->fd != -1)
-		return -1;
 
 	if (enable)
 		stream->flags |= UV_TCP_NODELAY;
@@ -1318,8 +1319,6 @@ int uv_udt_nodelay(uv_udt_t* udt, int enable) {
 int uv_udt_keepalive(uv_udt_t* udt, int enable, unsigned int delay) {
 	uv_stream_t* stream = (uv_stream_t*)udt;
 
-	if (stream->fd != -1)
-		return -1;
 
 	if (enable)
 		stream->flags |= UV_TCP_KEEPALIVE;
@@ -1389,7 +1388,7 @@ int uv_udt_setrendez(uv_udt_t* udt, int enable) {
 // transfer UDT error code to system errno
 int uv_translate_udt_error() {
 #ifdef UDT_DEBUG
-	fprintf(stdout, "func:%s, line:%d, errno: %d, %s\n", __FUNCTION__, __LINE__, udt_getlasterror_code(), udt_getlasterror_desc());
+	printf("func:%s, line:%d, errno: %d, %s\n", __FUNCTION__, __LINE__, udt_getlasterror_code(), udt_getlasterror_desc());
 #endif
 
 	switch (udt_getlasterror_code()) {
@@ -1458,5 +1457,3 @@ int uv_translate_udt_error() {
 	default: return errno = -1;
 	}
 }
-
-#endif // WIN32

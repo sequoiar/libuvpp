@@ -25,6 +25,7 @@ enum {
   UV_TCP_KEEPALIVE    = 0x200   /* Turn on keep-alive. */
 };
 
+
 #if defined(__unix__) || defined(__POSIX__) || defined(__APPLE__)
 // Unix-like platform
 
@@ -37,6 +38,14 @@ enum {
     int udtfd;                          \
     int accepted_udtfd;                 \
 
+
+#define UV_UDT_WRITE_PRIVATE_FIELDS     \
+    // empty
+
+
+#define UV_UDT_CONNECT_PRIVATE_FIELDS   \
+    // empty
+
 #else
 // Windows platform
 
@@ -48,6 +57,29 @@ enum {
 #define UV_UDT_PRIVATE_FIELDS           \
     int udtfd;                          \
     int accepted_udtfd;                 \
+    uv_connect_t *connect_req;          \
+    uv_shutdown_t *shutdown_req;        \
+    ngx_queue_t write_queue;            \
+    ngx_queue_t write_completed_queue;  \
+    uv_connection_cb connection_cb;     \
+    int delayed_error;                  \
+    SOCKET accepted_fd;                 \
+    SOCKET fd;                          \
+
+
+#define UV_REQ_BUFSML_SIZE (4)
+
+#define UV_UDT_WRITE_PRIVATE_FIELDS     \
+	ngx_queue_t queue;                  \
+	int write_index;                    \
+	uv_buf_t* bufs;                     \
+	int bufcnt;                         \
+	int error;                          \
+	uv_buf_t bufsml[UV_REQ_BUFSML_SIZE];\
+
+
+#define UV_UDT_CONNECT_PRIVATE_FIELDS   \
+	ngx_queue_t queue;
 
 
 // Android platform
@@ -60,7 +92,7 @@ enum {
 
 // UDT handle type, a sub-class of uv_tcp_t
 typedef struct uv_udt_s {
-	uv_tcp_t tcp;
+	uv_tcp_t stream;
 	uv_poll_t uvpoll;
 	UV_UDT_PRIVATE_FIELDS
 } uv_udt_t;
@@ -68,8 +100,14 @@ typedef struct uv_udt_s {
 
 // UDT req type
 typedef struct uv_udt_write_s {
-
+	uv_write_t write;
+	UV_UDT_WRITE_PRIVATE_FIELDS
 } uv_udt_write_t;
+
+typedef struct uv_udt_connect_s {
+	uv_connect_t connect;
+	UV_UDT_CONNECT_PRIVATE_FIELDS
+} uv_udt_connect_t;
 
 
 /*
@@ -132,6 +170,8 @@ UV_EXTERN int uv_udt_bindfd(uv_udt_t* handle, uv_os_sock_t udpfd);
 
 /* Don't export the private CPP symbols. */
 #undef UV_UDT_PRIVATE_FIELDS
+#undef UV_UDT_WRITE_PRIVATE_FIELDS
+#undef UV_UDT_CONNECT_PRIVATE_FIELDS
 
 
 #ifdef __cplusplus
