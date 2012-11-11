@@ -91,7 +91,7 @@ m_iMuxID(-1)
 #ifndef WIN32
 	// create event pipe with socketpair
 	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, m_evPipe) == 0);
-	assert((m_evPipe[0] >= 0) && (m_evPipe[1] >= 0));
+	assert((m_evPipe[0] > 0) && (m_evPipe[1] > 0));
 	// set event pipe non-block
 	int flags = 0, rc = 0;
 
@@ -109,7 +109,7 @@ m_iMuxID(-1)
 	}
 	rc = fcntl(m_evPipe[1], F_SETFL, flags | O_NONBLOCK); assert(rc != -1);
 
-    ///printf("open evPipe fds:%d,%d\n", m_evPipe[0], m_evPipe[1]);
+	///printf("open evPipe fds:%d,%d\n", m_evPipe[0], m_evPipe[1]);
 #else
 	// create tcp pair as event pipe
 

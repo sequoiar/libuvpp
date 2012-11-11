@@ -19,6 +19,7 @@ int uv_udt_init(uv_loop_t* loop, uv_udt_t* udt) {
 	udt_startup();
 
 	uv__stream_init(loop, (uv_stream_t*)udt, UV_UDT);
+	udt->udtfd = udt->accepted_udtfd = -1;
 	loop->counters.udt_init++;
 	return 0;
 }
@@ -62,7 +63,7 @@ static int uv__bind(
 	if (maybe_new_socket(udt, domain, UV_STREAM_READABLE|UV_STREAM_WRITABLE))
 	    return -1;
 
-	assert(udt->fd >= 0);
+	assert(udt->fd > 0);
 
 	udt->delayed_error = 0;
 	if (udt_bind(udt->udtfd, addr, addrsize) < 0) {
@@ -218,7 +219,7 @@ static int uv__bindfd(
 		}
 	}
 
-	assert(udt->fd >= 0);
+	assert(udt->fd > 0);
 
 	udt->delayed_error = 0;
 	if (udt_bind2(udt->udtfd, udpfd) == -1) {
