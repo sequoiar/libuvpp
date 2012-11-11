@@ -659,16 +659,6 @@ UV_EXTERN int uv_udt_keepalive(uv_udt_t* handle, int enable,
 /* Enable/disable UDT socket in rendezvous mode */
 UV_EXTERN int uv_udt_setrendez(uv_udt_t* handle, int enable);
 
-/*
- * This setting applies to Windows only.
- * Enable/disable simultaneous asynchronous accept requests that are
- * queued by the operating system when listening for new tcp connections.
- * This setting is used to tune a tcp server for the desired performance.
- * Having simultaneous accepts can significantly improve the rate of
- * accepting connections (which is why it is enabled by default).
- */
-UV_EXTERN int uv_udt_simultaneous_accepts(uv_udt_t* handle, int enable);
-
 UV_EXTERN int uv_udt_bind(uv_udt_t* handle, struct sockaddr_in);
 UV_EXTERN int uv_udt_bind6(uv_udt_t* handle, struct sockaddr_in6);
 UV_EXTERN int uv_udt_getsockname(uv_udt_t* handle, struct sockaddr* name,

@@ -1840,14 +1840,6 @@ int uv_udt_duplicate_socket(uv_udt_t* handle, int pid,
 }
 
 
-int uv_udt_simultaneous_accepts(uv_udt_t* handle, int enable) {
-#ifdef UDT_DEBUG
-	printf("Not support %s\n", __FUNCTION__);
-#endif
-	return -1;
-}
-
-
 #if 0
 // cancer socket from IOCP
 static int uv_udt_try_cancel_io(uv_udt_t* udt) {

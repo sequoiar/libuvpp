@@ -987,9 +987,11 @@ void CUDT::close()
 
    CGuard cg(m_ConnectionLock);
 
+#ifndef EVPIPE_OSFD
    // Signal the sender and recver if they are waiting for data.
    releaseSynch();
-   
+#endif
+
    if (m_bListening)
    {
       m_bListening = false;
@@ -1018,9 +1020,11 @@ void CUDT::close()
       m_bConnected = false;
    }
 
+#ifndef EVPIPE_OSFD
    // waiting all send and recv calls to stop
    CGuard sendguard(m_SendLock);
    CGuard recvguard(m_RecvLock);
+#endif
 
    // CLOSED.
    m_bOpened = false;
@@ -1742,9 +1746,12 @@ void CUDT::releaseSynch()
       pthread_mutex_unlock(&m_RecvLock);
    #else
       SetEvent(m_SendBlockCond);
+
       WaitForSingleObject(m_SendLock, INFINITE);
       ReleaseMutex(m_SendLock);
+
       SetEvent(m_RecvDataCond);
+
       WaitForSingleObject(m_RecvLock, INFINITE);
       ReleaseMutex(m_RecvLock);
    #endif
@@ -2247,8 +2254,10 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
       m_bBroken = true;
       m_iBrokenCounter = 60;
 
+#ifndef EVPIPE_OSFD
       // Signal the sender and recver if they are waiting for data.
       releaseSynch();
+#endif
 
       CTimer::triggerEvent();
 
@@ -2642,22 +2651,24 @@ void CUDT::checkTimers()
          m_bBroken = true;
          m_iBrokenCounter = 30;
 
-#ifdef EVPIPE_OSFD
-         // trigger event pipe right here
-         ///printf("%s.%s.%d, trigger Broken...", __FILE__, __FUNCTION__, __LINE__);
-         s_UDTUnited.feedOsfd(m_SocketID);
-         ///printf("done\n");
-#endif
-
          // update snd U list to remove this socket
          m_pSndQueue->m_pSndUList->update(this);
 
+#ifndef EVPIPE_OSFD
          releaseSynch();
+#endif
 
          // app can call any UDT API to learn the connection_broken error
          s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN | UDT_EPOLL_OUT | UDT_EPOLL_ERR, true);
 
          CTimer::triggerEvent();
+
+#ifdef EVPIPE_OSFD
+         // trigger event pipe right here
+         ///printf("%s.%s.%d, trigger Broken3...", __FILE__, __FUNCTION__, __LINE__);
+         s_UDTUnited.feedOsfd(m_SocketID);
+         ///printf("done3\n");
+#endif
 
          return;
       }

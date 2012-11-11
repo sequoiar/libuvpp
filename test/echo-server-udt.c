@@ -33,7 +33,7 @@ static uv_loop_t* loop;
 
 static int server_closed;
 static stream_type serverType;
-static uv_udt_t udtServer[1];
+static uv_udt_t udtServer[2];
 static uv_handle_t* server;
 
 static void after_write(uv_write_t* req, int status);
