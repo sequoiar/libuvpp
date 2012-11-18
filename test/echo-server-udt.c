@@ -24,6 +24,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+
+#define SERVER_MAX_NUM 10
+
 typedef struct {
   uv_write_t req;
   uv_buf_t buf;
@@ -31,10 +34,8 @@ typedef struct {
 
 static uv_loop_t* loop;
 
-static int server_closed;
 static stream_type serverType;
-static uv_udt_t udtServer[2];
-static uv_handle_t* server;
+static uv_udt_t udtServer[SERVER_MAX_NUM];
 
 static void after_write(uv_write_t* req, int status);
 static void after_read(uv_stream_t*, ssize_t nread, uv_buf_t buf);
@@ -61,7 +62,7 @@ static void after_write(uv_write_t* req, int status) {
 
 
 static void after_shutdown(uv_shutdown_t* req, int status) {
-	///printf("%s.%d\n", __FUNCTION__, __LINE__);
+  ///printf("%s.%d\n", __FUNCTION__, __LINE__);
   uv_close((uv_handle_t*)req->handle, on_close);
   free(req);
 }
@@ -112,7 +113,6 @@ static void after_read(uv_stream_t* handle, ssize_t nread, uv_buf_t buf) {
    * Scan for the letter Q which signals that we should quit the server.
    * If we get QS it means close the stream.
    */
-  if (!server_closed) {
     for (i = 0; i < nread; i++) {
       if (buf.base[i] == 'Q') {
         if (i + 1 < nread && buf.base[i + 1] == 'S') {
@@ -120,12 +120,10 @@ static void after_read(uv_stream_t* handle, ssize_t nread, uv_buf_t buf) {
           uv_close((uv_handle_t*)handle, on_close);
           return;
         } else {
-          uv_close(server, on_server_close);
-          server_closed = 1;
+          uv_close((uv_handle_t*)(((uv_handle_t*)handle)->data), on_server_close);
         }
       }
     }
-  }
 
   wr = (write_req_t*) malloc(sizeof *wr);
 
@@ -137,7 +135,7 @@ static void after_read(uv_stream_t* handle, ssize_t nread, uv_buf_t buf) {
 
 
 static void on_close(uv_handle_t* peer) {
-	///printf("%s.%d\n", __FUNCTION__, __LINE__);
+  ///printf("%s.%d\n", __FUNCTION__, __LINE__);
   free(peer);
 }
 
@@ -205,7 +203,7 @@ static void on_connection(uv_stream_t* server, int status) {
 
 static void on_server_close(uv_handle_t* handle) {
   ///printf("going on %s:%d\n", __FUNCTION__, __LINE__);
-  ASSERT(handle == server);
+  ///ASSERT(handle == server);
 }
 
 
@@ -251,7 +249,6 @@ static int udt4_echo_start(int port) {
 	serverType = UDT;
 	for (i = 0; i < (sizeof(udtServer) / sizeof(udtServer[0])); i ++) {
 		addr = uv_ip4_addr("0.0.0.0", port+i);
-		server = (uv_handle_t*)&udtServer[i];
 
 		r = uv_udt_init(loop, &udtServer[i]);
 		if (r) {

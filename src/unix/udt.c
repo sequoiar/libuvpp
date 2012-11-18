@@ -15,8 +15,13 @@
 ///#define UDT_DEBUG 1
 
 int uv_udt_init(uv_loop_t* loop, uv_udt_t* udt) {
+	static int _initialized = 0;
+
 	// insure startup UDT
-	udt_startup();
+	if (_initialized == 0) {
+		assert(udt_startup() == 0);
+		_initialized = 1;
+	}
 
 	uv__stream_init(loop, (uv_stream_t*)udt, UV_UDT);
 	udt->udtfd = udt->accepted_udtfd = -1;
@@ -188,20 +193,20 @@ static int uv__bindfd(
 	status = -1;
 
 	if (udt->fd < 0) {
-        	// extract domain info by existing udpfd ///////////////////////////////
-        	struct sockaddr_storage addr;
-        	socklen_t addrlen = sizeof(addr);
-        	int domain = AF_INET;
-    
-        	if (getsockname(udpfd, (struct sockaddr *)&addr, &addrlen) < 0) {
-            		uv__set_sys_error(udt->loop, uv_translate_udt_error());
+		// extract domain info by existing udpfd ///////////////////////////////
+		struct sockaddr_storage addr;
+		socklen_t addrlen = sizeof(addr);
+		int domain = AF_INET;
+
+		if (getsockname(udpfd, (struct sockaddr *)&addr, &addrlen) < 0) {
+			uv__set_sys_error(udt->loop, uv_translate_udt_error());
 			goto out;
-        	}
-        	domain = addr.ss_family;
-        	////////////////////////////////////////////////////////////////////////
-        
+		}
+		domain = addr.ss_family;
+		////////////////////////////////////////////////////////////////////////
+
 		if ((udt->udtfd = udt__socket(domain, SOCK_STREAM, 0)) == -1) {
-            		uv__set_sys_error(udt->loop, uv_translate_udt_error());
+			uv__set_sys_error(udt->loop, uv_translate_udt_error());
 			goto out;
 		}
 

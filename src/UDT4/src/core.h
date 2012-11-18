@@ -56,6 +56,8 @@ written by
 
 enum UDTSockType {UDT_STREAM = 1, UDT_DGRAM};
 
+class CUDTSocket;
+
 class CUDT
 {
 friend class CUDTSocket;
@@ -74,6 +76,8 @@ private: // constructor and desctructor
    CUDT(const CUDT& ancestor);
    const CUDT& operator=(const CUDT&) {return *this;}
    ~CUDT();
+
+   CUDTSocket* m_pCUDTSocket; // pointer to the CUDTSocket
 
 public: //API
    static int startup();
@@ -376,8 +380,10 @@ private: // synchronization: mutexes and conditions
    pthread_cond_t m_RecvDataCond;               // used to block "recv" when there is no data
    pthread_mutex_t m_RecvDataLock;              // lock associated to m_RecvDataCond
 
-   pthread_mutex_t m_SendLock;                  // used to synchronize "send" call
-   pthread_mutex_t m_RecvLock;                  // used to synchronize "recv" call
+   ///pthread_mutex_t m_SendLock;                  // used to synchronize "send" call
+   ///pthread_mutex_t m_RecvLock;                  // used to synchronize "recv" call
+
+   pthread_mutex_t m_SerialLock;                // used to keep recv/send/close/checkTimer call serially
 
    void initSynch();
    void destroySynch();
@@ -452,7 +458,22 @@ private: // for epoll
    std::set<int> m_sPollID;                     // set of epoll ID to trigger
    void addEPoll(const int eid);
    void removeEPoll(const int eid);
-};
 
+   // for async OS event mechanism
+#ifdef EVPIPE_OSFD
+
+private:
+   // event pipe used to integrate UDT to another existing event loop
+   SYSSOCKET m_evPipe[2];
+
+public:
+   // Functionality: retrieve, trigger event pipe with Os fd
+   // notes: trigger event by read->write Os fd with dummy byte
+   SYSSOCKET getOsfd();
+   int      feedOsfd();
+
+#endif
+
+};
 
 #endif

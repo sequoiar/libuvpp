@@ -180,6 +180,9 @@ static void uv_poll(uv_loop_t* loop, int block) {
   ULONG_PTR key;
   OVERLAPPED* overlapped;
   uv_req_t* req;
+  ULONG sflag;
+  DWORD hflag;
+  int valid = 0;
 
   if (block) {
     timeout = uv_get_poll_timeout(loop);
@@ -194,11 +197,21 @@ static void uv_poll(uv_loop_t* loop, int block) {
                                       timeout);
 
   if (overlapped) {
-    /* Package was dequeued */
-    req = uv_overlapped_to_req(overlapped);
+	/* sanity checking on socket or handle */
+	if (ioctlsocket((SOCKET)key, FIONREAD, &sflag) == 0) {
+      valid = 1;
+	} else if (GetHandleInformation((HANDLE)key, &hflag)) {
+	  valid = 1;
+	} else {
+	  ///printf("%s.%d,GetLastError():%d\n", __FUNCTION__, __LINE__, GetLastError());
+	}
 
-    uv_insert_pending_req(loop, req);
+	if (valid) {
+      /* Package was dequeued */
+      req = uv_overlapped_to_req(overlapped);
 
+      uv_insert_pending_req(loop, req);
+	}
   } else if ((GetLastError() != WAIT_TIMEOUT) &&
 		     (GetLastError() != ERROR_ABANDONED_WAIT_0)) {
     /* Serious error */

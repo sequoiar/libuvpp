@@ -162,6 +162,7 @@ int udt_close(UDTSOCKET u)
 		return 0;
 	} else {
 		rc = UDT::close(u);
+		///printf("%s.%d,u:%d,state:%d\n", __FUNCTION__, __LINE__, u, st);
 		if (rc == UDT::ERROR) {
 			// error happen
 			return -1;

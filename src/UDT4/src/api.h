@@ -86,10 +86,6 @@ public:
 
    pthread_mutex_t m_ControlLock;            // lock this socket exclusively for control APIs: bind/listen/connect
 
-#ifdef EVPIPE_OSFD
-   SYSSOCKET m_evPipe[2];                    // event pipe used to integrate UDT to another existing event loop
-#endif
-
 private:
    CUDTSocket(const CUDTSocket&);
    CUDTSocket& operator=(const CUDTSocket&);
@@ -165,13 +161,6 @@ public:
 
    UDTSTATUS getStatus(const UDTSOCKET u);
 
-#ifdef EVPIPE_OSFD
-   // Functionality: retrieve, trigger event pipe with Os fd
-   // notes: trigger event by read->write Os fd with dummy byte
-   SYSSOCKET getOsfd(const UDTSOCKET u);
-   int      feedOsfd(const UDTSOCKET u);
-#endif
-
    // socket APIs
    int bind(const UDTSOCKET u, const sockaddr* name, int namelen);
    int bind(const UDTSOCKET u, UDPSOCKET udpsock);
@@ -214,7 +203,6 @@ private:
 
 private:
    std::map<UDTSOCKET, CUDTSocket*> m_Sockets;       // stores all the socket structures
-   ///std::map<SYSSOCKET, UDTSOCKET>   m_Osfds;         // store Os fd map to UDTSOCKET
 
    pthread_mutex_t m_ControlLock;                    // used to synchronize UDT API
 

@@ -52,6 +52,8 @@ static int uv__udt_keepalive(uv_udt_t* handle, SOCKET socket, int enable, unsign
 
 static int uv_udt_set_socket(uv_loop_t* loop, uv_udt_t* handle,
     SOCKET socket, int imported) {
+  int non_ifs_lsp;
+
   assert(handle->socket == INVALID_SOCKET);
 
   /* Set the socket to nonblocking mode */
@@ -68,6 +70,18 @@ static int uv_udt_set_socket(uv_loop_t* loop, uv_udt_t* handle,
                              0) == NULL) {
       uv__set_sys_error(loop, GetLastError());
       return -1;
+  }
+
+  non_ifs_lsp = (handle->flags & UV_HANDLE_IPV6) ? uv_tcp_non_ifs_lsp_ipv6 :
+    uv_tcp_non_ifs_lsp_ipv4;
+
+  if (pSetFileCompletionNotificationModes && !non_ifs_lsp) {
+    if (pSetFileCompletionNotificationModes((HANDLE) socket,
+        FILE_SKIP_SET_EVENT_ON_HANDLE |
+        FILE_SKIP_COMPLETION_PORT_ON_SUCCESS)) {
+      uv__set_sys_error(loop, GetLastError());
+      return -1;
+    }
   }
 
   if ((handle->flags & UV_HANDLE_TCP_NODELAY) &&
@@ -88,10 +102,14 @@ static int uv_udt_set_socket(uv_loop_t* loop, uv_udt_t* handle,
 
 
 int uv_udt_init(uv_loop_t* loop, uv_udt_t* handle) {
+  static int _initialized = 0;
   int i;
 
   // insure startup UDT
-  udt_startup();
+  if (_initialized == 0) {
+    assert(udt_startup() == 0);
+    _initialized = 1;
+  }
 
   uv_stream_init(loop, (uv_stream_t*) handle, UV_UDT);
 
@@ -163,6 +181,7 @@ void uv_udt_endgame(uv_loop_t* loop, uv_udt_t* handle) {
   int sys_error;
   unsigned int i;
   uv_tcp_accept_t* req;
+  char dummy;
 
 
 #ifdef UDT_DEBUG
@@ -209,11 +228,13 @@ void uv_udt_endgame(uv_loop_t* loop, uv_udt_t* handle) {
 
 #ifdef UDT_DEBUG
   printf("%s.%d,"
+		  "osfd:%d, udtsocket:%d,"
 		  " reqs_pending:%d,"
 		  " activecnt:%d,"
 		  " write_pending:%d,"
 		  " shutdown_req:%d\n",
 		  __FUNCTION__, __LINE__,
+		  handle->socket, handle->udtfd,
 		  handle->reqs_pending,
 		  handle->activecnt,
 		  handle->write_reqs_pending,
@@ -233,6 +254,16 @@ void uv_udt_endgame(uv_loop_t* loop, uv_udt_t* handle) {
     if (!(handle->flags & UV_HANDLE_CONNECTION) && handle->accept_reqs) {
       free(handle->accept_reqs);
       handle->accept_reqs = NULL;
+    }
+
+    // close Osfd socket
+    ///printf("shutdown,%s.%d\n",  __FUNCTION__, __LINE__);
+    if (handle->socket != INVALID_SOCKET) {
+    	while (recv(handle->socket, &dummy, sizeof(dummy), 0) > 0) {
+    		///printf(".");
+    	}
+    	closesocket(handle->socket);
+    	handle->socket = INVALID_SOCKET;
     }
 
     uv__handle_close(handle);
@@ -261,6 +292,7 @@ static int uv__bind(uv_udt_t* handle,
     assert(udt_getsockopt(handle->udtfd, 0, (int)UDT_UDT_OSFD, &sock, &optlen) == 0);
 
     if (uv_udt_set_socket(handle->loop, handle, sock, 0) == -1) {
+      closesocket(sock);
       udt_close(handle->udtfd);
       return -1;
     }
@@ -339,6 +371,7 @@ static int uv__bindfd(
     assert(udt_getsockopt(handle->udtfd, 0, (int)UDT_UDT_OSFD, &sock, &optlen) == 0);
 
     if (uv_udt_set_socket(handle->loop, handle, sock, 0) == -1) {
+      closesocket(sock);
       udt_close(handle->udtfd);
       return -1;
     }
@@ -461,44 +494,6 @@ static void uv_udt_queue_poll(uv_loop_t* loop, uv_udt_t* handle) {
 	}
 
 	return;
-}
-
-
-static void CALLBACK post_completion(void* context, BOOLEAN timed_out) {
-  uv_req_t* req;
-  uv_udt_t* handle;
-
-  req = (uv_req_t*) context;
-  assert(req != NULL);
-  handle = (uv_udt_t*)req->data;
-  assert(handle != NULL);
-  assert(!timed_out);
-
-  if (!PostQueuedCompletionStatus(handle->loop->iocp,
-                                  req->overlapped.InternalHigh,
-                                  0,
-                                  &req->overlapped)) {
-    uv_fatal_error(GetLastError(), "PostQueuedCompletionStatus");
-  }
-}
-
-
-static void CALLBACK post_write_completion(void* context, BOOLEAN timed_out) {
-  uv_write_t* req;
-  uv_udt_t* handle;
-
-  req = (uv_write_t*) context;
-  assert(req != NULL);
-  handle = (uv_udt_t*)req->handle;
-  assert(handle != NULL);
-  assert(!timed_out);
-
-  if (!PostQueuedCompletionStatus(handle->loop->iocp,
-                                  req->overlapped.InternalHigh,
-                                  0,
-                                  &req->overlapped)) {
-    uv_fatal_error(GetLastError(), "PostQueuedCompletionStatus");
-  }
 }
 
 
@@ -707,6 +702,7 @@ int uv_udt_accept(uv_udt_t* server, uv_udt_t* client) {
   assert(udt_getsockopt(client->udtfd, 0, (int)UDT_UDT_OSFD, &req->accept_socket, &optlen) == 0);
 
   if (uv_udt_set_socket(client->loop, client, req->accept_socket, 0) == -1) {
+	  closesocket(req->accept_socket);
 	  udt_close(client->udtfd);
 	  rv = -1;
   } else {
@@ -1298,9 +1294,9 @@ INLINE static void udt_process_reqs_udtread(uv_loop_t* loop, uv_udt_t* handle) {
 							/* Read buffer was completely empty, report a 0-byte read. */
 							uv__set_sys_error(loop, WSAEWOULDBLOCK);
 							handle->read_cb((uv_stream_t*)handle, bytes, buf);
-						} else if (0/*(err == WSAECONNABORTED) ||
-								      (err == WSAENOTSOCK)*/) {
-							/* Connection closed or  socket broken as EOF*/
+						} else if ((err == WSAECONNABORTED) ||
+								   (err == WSAENOTSOCK)) {
+							/* Connection closed or socket broken as EOF*/
 							if (handle->flags & UV_HANDLE_READING) {
 								handle->flags &= ~UV_HANDLE_READING;
 								DECREASE_ACTIVE_COUNT(loop, handle);
@@ -1529,11 +1525,16 @@ void uv_process_udt_poll_req(
 	if (req->udtflag & UV_UDT_REQ_POLL) {
 		if (udtev & UDT_UDT_EPOLL_ERR) {
 			// clear pending event
-			while (recv(handle->socket, &dummy, sizeof(dummy), 0) > 0);
-			closesocket(handle->socket);
+			/*if (handle->socket != INVALID_SOCKET) {
+				while (recv(handle->socket, &dummy, sizeof(dummy), 0) > 0) {
+                    printf(".");
+				}
+				closesocket(handle->socket);
+				handle->socket = INVALID_SOCKET;
+			}*/
 
 			// game over in error case, when last error event coming
-			assert(handle->reqs_pending == 0);
+			///assert(handle->reqs_pending == 0);
 			///uv_want_endgame(handle->loop, (uv_handle_t*)handle);
 		} else {
 			// going on next event
@@ -1545,11 +1546,16 @@ void uv_process_udt_poll_req(
 	// try to game over in error case anyway
 	if (req->udtflag & UV_UDT_REQ_POLL_ERROR) {
 		// clear pending event
-		while (recv(handle->socket, &dummy, sizeof(dummy), 0) > 0);
-		closesocket(handle->socket);
+		/*if (handle->socket != INVALID_SOCKET) {
+			while (recv(handle->socket, &dummy, sizeof(dummy), 0) > 0) {
+				printf(".");
+			}
+			closesocket(handle->socket);
+			handle->socket = INVALID_SOCKET;
+		}*/
 
 		// game over in error case, when last error event coming
-		assert(handle->reqs_pending == 0);
+		///assert(handle->reqs_pending == 0);
 		///uv_want_endgame(handle->loop, (uv_handle_t*)handle);
 	}
 
@@ -1840,48 +1846,7 @@ int uv_udt_duplicate_socket(uv_udt_t* handle, int pid,
 }
 
 
-#if 0
-// cancer socket from IOCP
-static int uv_udt_try_cancel_io(uv_udt_t* udt) {
-	  SOCKET socket = udt->socket;
-	  int non_ifs_lsp;
-
-	  /* Check if we have any non-IFS LSPs stacked on top of TCP */
-	  non_ifs_lsp = (udt->flags & UV_HANDLE_IPV6) ? uv_tcp_non_ifs_lsp_ipv6 :
-	                                                uv_tcp_non_ifs_lsp_ipv4;
-
-	  /* If there are non-ifs LSPs then try to obtain a base handle for the */
-	  /* socket. This will always fail on Windows XP/3k. */
-	  if (non_ifs_lsp) {
-	    DWORD bytes;
-	    if (WSAIoctl(socket,
-	                 SIO_BASE_HANDLE,
-	                 NULL,
-	                 0,
-	                 &socket,
-	                 sizeof socket,
-	                 &bytes,
-	                 NULL,
-	                 NULL) != 0) {
-	      /* Failed. We can't do CancelIo. */
-	      return -1;
-	    }
-	  }
-
-	  assert(socket != 0 && socket != INVALID_SOCKET);
-
-	  if (!CancelIo((HANDLE) socket)) {
-	    return -1;
-	  }
-
-	  /* It worked. */
-	  return 0;
-}
-#endif
-
 void uv_udt_close(uv_loop_t* loop, uv_udt_t* udt) {
-  char dummy;
-
   if (udt->flags & UV_HANDLE_READING) {
     udt->flags &= ~UV_HANDLE_READING;
     DECREASE_ACTIVE_COUNT(loop, udt);
@@ -1919,10 +1884,6 @@ void uv_udt_close(uv_loop_t* loop, uv_udt_t* udt) {
 #endif
 
   if (udt->reqs_pending == 0) {
-    // clear pending event
-	while (recv(udt->socket, &dummy, sizeof(dummy), 0) > 0);
-	closesocket(udt->socket);
-
     uv_want_endgame(udt->loop, (uv_handle_t*)udt);
   }
 }

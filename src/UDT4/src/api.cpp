@@ -85,129 +85,14 @@ m_iMuxID(-1)
 	m_ControlLock = CreateMutex(NULL, false, NULL);
 #endif
 
-// event pipe creation
-#ifdef EVPIPE_OSFD
+	///////////////////////////////////
+	// sanity checking on mutex
+	CGuard::enterCS(m_AcceptLock);
+	CGuard::leaveCS(m_AcceptLock);
 
-#ifndef WIN32
-	// create event pipe with socketpair
-	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, m_evPipe) == 0);
-	assert((m_evPipe[0] > 0) && (m_evPipe[1] > 0));
-	// set event pipe non-block
-	int flags = 0, rc = 0;
-
-	fcntl(m_evPipe[0], F_SETFD, FD_CLOEXEC);
-	flags = fcntl(m_evPipe[0], F_GETFL, 0);
-	if (flags == -1) {
-        flags = 0;
-	}
-	rc = fcntl(m_evPipe[0], F_SETFL, flags | O_NONBLOCK); assert(rc != -1);
-
-	fcntl(m_evPipe[1], F_SETFD, FD_CLOEXEC);
-	flags = fcntl(m_evPipe[1], F_GETFL, 0);
-	if (flags == -1) {
-        flags = 0;
-	}
-	rc = fcntl(m_evPipe[1], F_SETFL, flags | O_NONBLOCK); assert(rc != -1);
-
-	///printf("open evPipe fds:%d,%d\n", m_evPipe[0], m_evPipe[1]);
-#else
-	// create tcp pair as event pipe
-
-    // This function has to be in a system-wide critical section so that
-    // two instances of the library don't accidentally create signaler
-    // crossing the process boundary.
-    // We'll use named event object to implement the critical section.
-    HANDLE sync = CreateEvent (NULL, FALSE, TRUE, "udt-evpipe-sync");
-    assert(sync != NULL);
-
-    // Enter the critical section.
-    DWORD dwrc = WaitForSingleObject(sync, INFINITE);
-    assert(dwrc == WAIT_OBJECT_0);
-
-    // Windows has no 'socketpair' function. CreatePipe is no good as pipe
-    // handles cannot be polled on. Here we create the socketpair by hand.
-    m_evPipe[0] = INVALID_SOCKET;
-    m_evPipe[1] = INVALID_SOCKET;
-
-    // Create listening socket.
-    SOCKET listener;
-    listener = socket(AF_INET, SOCK_STREAM, 0);
-    assert(listener != INVALID_SOCKET);
-
-    // Set SO_REUSEADDR and TCP_NODELAY on listening socket.
-    BOOL so_reuseaddr = 1;
-    int rc = setsockopt(listener, SOL_SOCKET, SO_REUSEADDR,
-        (char *)&so_reuseaddr, sizeof (so_reuseaddr));
-    assert(rc != SOCKET_ERROR);
-    BOOL tcp_nodelay = 1;
-    rc = setsockopt(listener, IPPROTO_TCP, TCP_NODELAY,
-        (char *)&tcp_nodelay, sizeof (tcp_nodelay));
-    assert(rc != SOCKET_ERROR);
-
-    // Bind listening socket to any free local port.
-    // in case failed, we will re-try on the different port. :)
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof (addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-
-    int lp = 5888; // start port to try
-    int re_try = 0;
-    while (1) {
-    	addr.sin_port = htons(lp);
-    	rc = bind(listener, (const struct sockaddr*) &addr, sizeof (addr));
-
-    	// ongoing next port
-    	if (re_try > 6) break;
-        lp ++;
-        re_try ++;
-
-    	if (rc == SOCKET_ERROR) continue;
-    	// Listen for incoming connections.
-        rc = listen(listener, 1);
-        if (rc == SOCKET_ERROR) {
-            continue;
-        } else {
-            break;
-        }
-    }
-    if (re_try > 3) {
-    	assert(0);
-    }
-
-    // Create the writer socket.
-    m_evPipe[1] = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0,  0);
-    assert(m_evPipe[1] != INVALID_SOCKET);
-
-    // Set TCP_NODELAY on writer socket.
-    rc = setsockopt(m_evPipe[1], IPPROTO_TCP, TCP_NODELAY,
-        (char *)&tcp_nodelay, sizeof (tcp_nodelay));
-    assert (rc != SOCKET_ERROR);
-
-    // Connect writer to the listener.
-    rc = connect(m_evPipe[1], (sockaddr *) &addr, sizeof (addr));
-    assert (rc != SOCKET_ERROR);
-
-    // Accept connection from writer.
-    m_evPipe[0] = accept(listener, NULL, NULL);
-    assert (m_evPipe[0] != INVALID_SOCKET);
-
-    // We don't need the listening socket anymore. Close it.
-    rc = closesocket(listener);
-    assert (rc != SOCKET_ERROR);
-
-    // Exit the critical section.
-    BOOL brc = SetEvent(sync);
-    assert(brc != 0);
-
-	// set event pipe non-block
-	unsigned long arg = 1;
-	rc = ioctlsocket(m_evPipe[0], FIONBIO, &arg); assert(rc != SOCKET_ERROR);
-	rc = ioctlsocket(m_evPipe[1], FIONBIO, &arg); assert(rc != SOCKET_ERROR);
-	///printf("open evPipe fds:%d,%d\n", m_evPipe[0], m_evPipe[1]);
-#endif
-
-#endif
+	CGuard::enterCS(m_ControlLock);
+	CGuard::leaveCS(m_ControlLock);
+	///////////////////////////////////
 }
 
 CUDTSocket::~CUDTSocket()
@@ -229,32 +114,20 @@ CUDTSocket::~CUDTSocket()
 	delete m_pQueuedSockets;
 	delete m_pAcceptSockets;
 
+	///////////////////////////////////
+	// sanity checking on mutex
+	CGuard::enterCS(m_AcceptLock);
+	CGuard::leaveCS(m_AcceptLock);
+
+	CGuard::enterCS(m_ControlLock);
+	CGuard::leaveCS(m_ControlLock);
+	///////////////////////////////////
+
 #ifndef WIN32
-
-#ifdef EVPIPE_OSFD
-	// close event pipe
-	///printf("close evPipe fds:%d,%d\n", m_evPipe[0], m_evPipe[1]);
-	close(m_evPipe[0]);
-	close(m_evPipe[1]);
-#endif
-
 	pthread_mutex_destroy(&m_AcceptLock);
 	pthread_cond_destroy(&m_AcceptCond);
 	pthread_mutex_destroy(&m_ControlLock);
 #else
-
-#ifdef EVPIPE_OSFD
-	///char dummy = 0x68;
-
-	///printf("close evPipe fds:%d,%d\n", m_evPipe[0], m_evPipe[1]);
-	///send(m_evPipe[1], &dummy, sizeof(dummy), 0);
-	// close event pipe
-	///printf("close evPipe fds:%d,%d\n", m_evPipe[0], m_evPipe[1]);
-	// let user close reading socket to avoid loss closing event
-	///closesocket(m_evPipe[0]);
-	closesocket(m_evPipe[1]);
-#endif
-
 	CloseHandle(m_AcceptLock);
 	CloseHandle(m_AcceptCond);
 	CloseHandle(m_ControlLock);
@@ -293,6 +166,18 @@ m_ClosedSockets()
       m_InitLock = CreateMutex(NULL, false, NULL);
    #endif
 
+      ///////////////////////////////////
+      // sanity checking on mutex
+      CGuard::enterCS(m_ControlLock);
+      CGuard::leaveCS(m_ControlLock);
+
+      CGuard::enterCS(m_IDLock);
+      CGuard::leaveCS(m_IDLock);
+
+      CGuard::enterCS(m_InitLock);
+      CGuard::leaveCS(m_InitLock);
+      ///////////////////////////////////
+
    #ifndef WIN32
       pthread_key_create(&m_TLSError, TLSDestroy);
    #else
@@ -305,6 +190,18 @@ m_ClosedSockets()
 
 CUDTUnited::~CUDTUnited()
 {
+	///////////////////////////////////
+	// sanity checking on mutex
+	CGuard::enterCS(m_ControlLock);
+	CGuard::leaveCS(m_ControlLock);
+
+	CGuard::enterCS(m_IDLock);
+	CGuard::leaveCS(m_IDLock);
+
+	CGuard::enterCS(m_InitLock);
+	CGuard::leaveCS(m_InitLock);
+	///////////////////////////////////
+
    #ifndef WIN32
       pthread_mutex_destroy(&m_ControlLock);
       pthread_mutex_destroy(&m_IDLock);
@@ -361,9 +258,15 @@ int CUDTUnited::startup()
       ///assert(SetThreadPriority(m_GCThread, THREAD_PRIORITY_TIME_CRITICAL/*THREAD_PRIORITY_ABOVE_NORMAL*/));
    #endif
 
-   m_bGCStatus = true;
+      ///////////////////////////////////
+      // sanity checking on mutex
+      CGuard::enterCS(m_GCStopLock);
+      CGuard::leaveCS(m_GCStopLock);
+      ///////////////////////////////////
 
-   return 0;
+      m_bGCStatus = true;
+
+      return 0;
 }
 
 int CUDTUnited::cleanup()
@@ -377,6 +280,12 @@ int CUDTUnited::cleanup()
 
    if (!m_bGCStatus)
       return 0;
+
+   ///////////////////////////////////
+   // sanity checking on mutex
+   CGuard::enterCS(m_GCStopLock);
+   CGuard::leaveCS(m_GCStopLock);
+   ///////////////////////////////////
 
    m_bClosing = true;
    #ifndef WIN32
@@ -413,6 +322,7 @@ UDTSOCKET CUDTUnited::newSocket(int af, int type)
    {
       ns = new CUDTSocket;
       ns->m_pUDT = new CUDT;
+      ns->m_pUDT->m_pCUDTSocket = ns;
       if (AF_INET == af)
       {
          ns->m_pSelfAddr = (sockaddr*)(new sockaddr_in);
@@ -442,7 +352,9 @@ UDTSOCKET CUDTUnited::newSocket(int af, int type)
    ns->m_pUDT->m_pCache = m_pCache;
 
    // protect the m_Sockets structure.
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard::enterCS(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    try
    {
       m_Sockets[ns->m_SocketID] = ns;
@@ -450,16 +362,19 @@ UDTSOCKET CUDTUnited::newSocket(int af, int type)
    catch (...)
    {
       //failure and rollback
-      CGuard::leaveCS(m_ControlLock);
+      ///CGuard::leaveCS(m_ControlLock);
       delete ns;
       ns = NULL;
    }
    CGuard::leaveCS(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
-   if (NULL == ns)
-      throw CUDTException(3, 2, 0);
-
-   return ns->m_SocketID;
+   if (NULL == ns) {
+	   throw CUDTException(3, 2, 0);
+	   return CUDT::INVALID_SOCK;
+   } else {
+	   return ns->m_SocketID;
+   }
 }
 
 int CUDTUnited::newConnection(const UDTSOCKET listen, const sockaddr* peer, CHandShake* hs)
@@ -509,6 +424,7 @@ int CUDTUnited::newConnection(const UDTSOCKET listen, const sockaddr* peer, CHan
    {
       ns = new CUDTSocket;
       ns->m_pUDT = new CUDT(*(ls->m_pUDT));
+      ns->m_pUDT->m_pCUDTSocket = ns;
       if (AF_INET == ls->m_iIPversion)
       {
          ns->m_pSelfAddr = (sockaddr*)(new sockaddr_in);
@@ -562,7 +478,9 @@ int CUDTUnited::newConnection(const UDTSOCKET listen, const sockaddr* peer, CHan
    CIPAddress::pton(ns->m_pSelfAddr, ns->m_pUDT->m_piSelfIP, ns->m_iIPversion);
 
    // protect the m_Sockets structure.
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard::enterCS(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    try
    {
       m_Sockets[ns->m_SocketID] = ns;
@@ -573,6 +491,7 @@ int CUDTUnited::newConnection(const UDTSOCKET listen, const sockaddr* peer, CHan
       error = 2;
    }
    CGuard::leaveCS(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    CGuard::enterCS(ls->m_AcceptLock);
    try
@@ -592,7 +511,7 @@ int CUDTUnited::newConnection(const UDTSOCKET listen, const sockaddr* peer, CHan
 
 #ifdef EVPIPE_OSFD
    // trigger event pipe
-   feedOsfd(listen);
+   ns->m_pUDT->feedOsfd();
 #endif
 
 ERR_ROLLBACK:
@@ -620,20 +539,29 @@ ERR_ROLLBACK:
 CUDT* CUDTUnited::lookup(const UDTSOCKET u)
 {
    // protects the m_Sockets structure
-   CGuard cg(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+   ///CGuard cg(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.find(u);
 
-   if ((i == m_Sockets.end()) || (i->second->m_Status == CLOSED))
-      throw CUDTException(5, 4, 0);
-
-   return i->second->m_pUDT;
+   if (i == m_Sockets.end()) {
+	   throw CUDTException(5, 4, 0);
+	   return NULL;
+   } else if (i->second->m_Status == CLOSED) {
+	   throw CUDTException(5, 4, 0);
+	   return i->second->m_pUDT;
+   } else {
+	   return i->second->m_pUDT;
+   }
 }
 
 UDTSTATUS CUDTUnited::getStatus(const UDTSOCKET u)
 {
    // protects the m_Sockets structure
-   CGuard cg(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+   ///CGuard cg(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.find(u);
 
@@ -651,58 +579,16 @@ UDTSTATUS CUDTUnited::getStatus(const UDTSOCKET u)
    return i->second->m_Status;   
 }
 
-///////////////////////////////////////////////////////////////////
-#ifdef EVPIPE_OSFD
-// retrieve m_evPipe[0] OS fd
-SYSSOCKET CUDTUnited::getOsfd(const UDTSOCKET u)
-{
-	CGuard cg(m_ControlLock);
-
-	map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.find(u);
-	if ((i == m_Sockets.end()) || (i->second->m_Status == CLOSED)) {
-		///throw CUDTException(5, 4, 0);
-		///printf("getOsfd: invalid osfd\n");
-#ifdef WIN32
-		return INVALID_SOCKET;
-#else
-		return -1;
-#endif
-	} else {
-		///printf("getOsfd of UDT@%d\n", u);
-		return i->second->m_evPipe[0];
-	}
-}
-
-// feed OS fd to trigger safe edge event
-int CUDTUnited::feedOsfd(const UDTSOCKET u)
-{
-	CGuard cg(m_ControlLock);
-
-	map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.find(u);
-	if ((i == m_Sockets.end()) || (i->second->m_Status == CLOSED)) {
-		///throw CUDTException(5, 4, 0);
-		///printf("feedOsfd: invalid osfd\n");
-		return -1;
-	} else {
-		///printf("feedOsfd of UDT@%d\n", u);
-		char dummy;
-#ifndef WIN32
-		recv(i->second->m_evPipe[0], &dummy, sizeof(dummy), 0);
-#endif
-		dummy = 0x68;
-		return send(i->second->m_evPipe[1], &dummy, sizeof(dummy), 0);
-	}
-}
-#endif
-//////////////////////////////////////////////////////////////////////////
-
 int CUDTUnited::bind(const UDTSOCKET u, const sockaddr* name, int namelen)
 {
    CUDTSocket* s = locate(u);
-   if (NULL == s)
-      throw CUDTException(5, 4, 0);
-
+   if (NULL == s) {
+	   throw CUDTException(5, 4, 0);
+	   return 0;
+   }
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(s->m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    // cannot bind a socket more than once
    if (INIT != s->m_Status)
@@ -733,10 +619,14 @@ int CUDTUnited::bind(const UDTSOCKET u, const sockaddr* name, int namelen)
 int CUDTUnited::bind(UDTSOCKET u, UDPSOCKET udpsock)
 {
    CUDTSocket* s = locate(u);
-   if (NULL == s)
-      throw CUDTException(5, 4, 0);
+   if (NULL == s) {
+	   throw CUDTException(5, 4, 0);
+	   return 0;
+   }
 
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(s->m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    // cannot bind a socket more than once
    if (INIT != s->m_Status)
@@ -774,10 +664,13 @@ int CUDTUnited::bind(UDTSOCKET u, UDPSOCKET udpsock)
 int CUDTUnited::listen(const UDTSOCKET u, int backlog)
 {
    CUDTSocket* s = locate(u);
-   if (NULL == s)
+   if (NULL == s) {
       throw CUDTException(5, 4, 0);
-
+      return 0;
+   }
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(s->m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    // do nothing if the socket is already listening
    if (LISTENING == s->m_Status)
@@ -822,8 +715,10 @@ UDTSOCKET CUDTUnited::accept(const UDTSOCKET listen, sockaddr* addr, int* addrle
 
    CUDTSocket* ls = locate(listen);
 
-   if (ls == NULL)
+   if (ls == NULL) {
       throw CUDTException(5, 4, 0);
+      return CUDT::INVALID_SOCK;
+   }
 
    // the "listen" socket must be in LISTENING status
    if (LISTENING != ls->m_Status)
@@ -933,20 +828,19 @@ UDTSOCKET CUDTUnited::accept(const UDTSOCKET listen, sockaddr* addr, int* addrle
       memcpy(addr, locate(u)->m_pPeerAddr, *addrlen);
    }
 
-   ///printf("accept event pipe[2]:%d,%d\n",
-   ///locate(u)->m_evPipe[0],
-   ///locate(u)->m_evPipe[1]);
-
    return u;
 }
 
 int CUDTUnited::connect(const UDTSOCKET u, const sockaddr* name, int namelen)
 {
    CUDTSocket* s = locate(u);
-   if (NULL == s)
+   if (NULL == s) {
       throw CUDTException(5, 4, 0);
-
+      return 0;
+   }
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(s->m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    // check the size of SOCKADDR structure
    if (AF_INET == s->m_iIPversion)
@@ -1008,8 +902,10 @@ int CUDTUnited::connect(const UDTSOCKET u, const sockaddr* name, int namelen)
 void CUDTUnited::connect_complete(const UDTSOCKET u)
 {
    CUDTSocket* s = locate(u);
-   if (NULL == s)
+   if (NULL == s) {
       throw CUDTException(5, 4, 0);
+      return;
+   }
 
    // copy address information of local node
    // the local port must be correctly assigned BEFORE CUDT::connect(),
@@ -1022,18 +918,24 @@ void CUDTUnited::connect_complete(const UDTSOCKET u)
 
 int CUDTUnited::close(const UDTSOCKET u)
 {
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CUDTSocket* s = locate(u);
-   if (NULL == s)
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+   if (NULL == s) {
       throw CUDTException(5, 4, 0);
+      return 0;
+   }
 
 #ifdef EVPIPE_OSFD
    // trigger event pipe to notify closing
    ///printf("%s.%s.%d, trigger Closing...", __FILE__, __FUNCTION__, __LINE__);
-   feedOsfd(s->m_SocketID);
+   s->m_pUDT->feedOsfd();
    ///printf("done\n");
 #endif
 
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard socket_cg(s->m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    if (s->m_Status == LISTENING)
    {
@@ -1058,7 +960,9 @@ int CUDTUnited::close(const UDTSOCKET u)
    s->m_pUDT->close();
 
    // synchronize with garbage collection.
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard manager_cg(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    // since "s" is located before m_ControlLock, locate it again in case it became invalid
    map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.find(u);
@@ -1078,6 +982,13 @@ int CUDTUnited::close(const UDTSOCKET u)
 
    CTimer::triggerEvent();
 
+#ifdef EVPIPE_OSFD
+   // trigger event pipe to notify closing
+   ///printf("%s.%s.%d, trigger Closing...", __FILE__, __FUNCTION__, __LINE__);
+   ///s->m_pUDT->feedOsfd();
+   ///printf("done\n");
+#endif
+
    return 0;
 }
 
@@ -1088,8 +999,10 @@ int CUDTUnited::getpeername(const UDTSOCKET u, sockaddr* name, int* namelen)
 
    CUDTSocket* s = locate(u);
 
-   if (NULL == s)
+   if (NULL == s) {
       throw CUDTException(5, 4, 0);
+      return 0;
+   }
 
    if (!s->m_pUDT->m_bConnected || s->m_pUDT->m_bBroken)
       throw CUDTException(2, 2, 0);
@@ -1109,8 +1022,10 @@ int CUDTUnited::getsockname(const UDTSOCKET u, sockaddr* name, int* namelen)
 {
    CUDTSocket* s = locate(u);
 
-   if (NULL == s)
+   if (NULL == s) {
       throw CUDTException(5, 4, 0);
+      return 0;
+   }
 
    if (s->m_pUDT->m_bBroken)
       throw CUDTException(5, 4, 0);
@@ -1365,7 +1280,9 @@ int CUDTUnited::epoll_release(const int eid)
 
 CUDTSocket* CUDTUnited::locate(const UDTSOCKET u)
 {
-   CGuard cg(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+   ///CGuard cg(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.find(u);
 
@@ -1377,7 +1294,9 @@ CUDTSocket* CUDTUnited::locate(const UDTSOCKET u)
 
 CUDTSocket* CUDTUnited::locate(const sockaddr* peer, const UDTSOCKET id, int32_t isn)
 {
-   CGuard cg(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+   ///CGuard cg(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    map<int64_t, set<UDTSOCKET> >::iterator i = m_PeerRec.find((id << 30) + isn);
    if (i == m_PeerRec.end())
@@ -1399,7 +1318,9 @@ CUDTSocket* CUDTUnited::locate(const sockaddr* peer, const UDTSOCKET id, int32_t
 
 void CUDTUnited::checkBrokenSockets()
 {
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    // set of sockets To Be Closed and To Be Removed
    vector<UDTSOCKET> tbc;
@@ -1410,14 +1331,24 @@ void CUDTUnited::checkBrokenSockets()
       // check broken connection
       if (i->second->m_pUDT->m_bBroken)
       {
+    	 // CUDTSocket lock
+    	 CGuard::enterCS(i->second->m_ControlLock);
+
          if (i->second->m_Status == LISTENING)
          {
             // for a listening socket, it should wait an extra 3 seconds in case a client is connecting
-            if (CTimer::getTime() - i->second->m_TimeStamp < 3000000)
+            if (CTimer::getTime() - i->second->m_TimeStamp < 3000000) {
+               // CUDTSocket unlock
+               CGuard::leaveCS(i->second->m_ControlLock);
+
                continue;
+            }
          }
          else if ((i->second->m_pUDT->m_pRcvBuffer != NULL) && (i->second->m_pUDT->m_pRcvBuffer->getRcvDataSize() > 0) && (i->second->m_pUDT->m_iBrokenCounter -- > 0))
          {
+            // CUDTSocket unlock
+        	CGuard::leaveCS(i->second->m_ControlLock);
+
             // if there is still data in the receiver buffer, wait longer
             continue;
          }
@@ -1433,14 +1364,24 @@ void CUDTUnited::checkBrokenSockets()
          if (ls == m_Sockets.end())
          {
             ls = m_ClosedSockets.find(i->second->m_ListenSocket);
-            if (ls == m_ClosedSockets.end())
+            if (ls == m_ClosedSockets.end()) {
+               // CUDTSocket unlock
+               CGuard::leaveCS(i->second->m_ControlLock);
+
                continue;
+            }
          }
 
+         ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
          CGuard::enterCS(ls->second->m_AcceptLock);
+         ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
          ls->second->m_pQueuedSockets->erase(i->second->m_SocketID);
          ls->second->m_pAcceptSockets->erase(i->second->m_SocketID);
          CGuard::leaveCS(ls->second->m_AcceptLock);
+         ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+
+         // CUDTSocket unlock
+         CGuard::leaveCS(i->second->m_ControlLock);
       }
    }
 
@@ -1486,7 +1427,9 @@ void CUDTUnited::removeSocket(const UDTSOCKET u)
 
    if (NULL != i->second->m_pQueuedSockets)
    {
+	  ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
       CGuard::enterCS(i->second->m_AcceptLock);
+      ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
       // if it is a listener, close all un-accepted sockets in its queue and remove them later
       for (set<UDTSOCKET>::iterator q = i->second->m_pQueuedSockets->begin(); q != i->second->m_pQueuedSockets->end(); ++ q)
@@ -1499,6 +1442,7 @@ void CUDTUnited::removeSocket(const UDTSOCKET u)
          m_Sockets.erase(*q);
       }
 
+      ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
       CGuard::leaveCS(i->second->m_AcceptLock);
    }
 
@@ -1595,7 +1539,13 @@ void CUDTUnited::checkTLSValue()
 
 void CUDTUnited::updateMux(CUDTSocket* s, const sockaddr* addr, const UDPSOCKET* udpsock)
 {
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+   CGuard cgs(s->m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    if ((s->m_pUDT->m_bReuseAddr) && (NULL != addr))
    {
@@ -1666,7 +1616,13 @@ void CUDTUnited::updateMux(CUDTSocket* s, const sockaddr* addr, const UDPSOCKET*
 
 void CUDTUnited::updateMux(CUDTSocket* s, const CUDTSocket* ls)
 {
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+   CGuard cgs(s->m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    int port = (AF_INET == ls->m_iIPversion) ? ntohs(((sockaddr_in*)ls->m_pSelfAddr)->sin_port) : ntohs(((sockaddr_in6*)ls->m_pSelfAddr)->sin6_port);
 
@@ -1707,19 +1663,24 @@ void CUDTUnited::updateMux(CUDTSocket* s, const CUDTSocket* ls)
          timeval now;
          timespec timeout;
          gettimeofday(&now, 0);
-         timeout.tv_sec = now.tv_sec + 1;
+         timeout.tv_sec = now.tv_sec + 10; // 1s->10s to adapt low speed network
          timeout.tv_nsec = now.tv_usec * 1000;
 
          pthread_cond_timedwait(&self->m_GCStopCond, &self->m_GCStopLock, &timeout);
       #else
-         WaitForSingleObject(self->m_GCStopCond, 1000);
+         WaitForSingleObject(self->m_GCStopCond, 10000); // 1s->10s to adapt low speed network
       #endif
    }
 
    // remove all sockets and multiplexers
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard::enterCS(self->m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    for (map<UDTSOCKET, CUDTSocket*>::iterator i = self->m_Sockets.begin(); i != self->m_Sockets.end(); ++ i)
    {
+	  // CUDTSocket lock
+	  CGuard::enterCS(i->second->m_ControlLock);
+
       i->second->m_pUDT->m_bBroken = true;
       i->second->m_pUDT->close();
       i->second->m_Status = CLOSED;
@@ -1731,14 +1692,21 @@ void CUDTUnited::updateMux(CUDTSocket* s, const CUDTSocket* ls)
       if (ls == self->m_Sockets.end())
       {
          ls = self->m_ClosedSockets.find(i->second->m_ListenSocket);
-         if (ls == self->m_ClosedSockets.end())
+         if (ls == self->m_ClosedSockets.end()) {
+            // CUDTSocket unlock
+        	CGuard::leaveCS(i->second->m_ControlLock);
+
             continue;
+         }
       }
 
       CGuard::enterCS(ls->second->m_AcceptLock);
       ls->second->m_pQueuedSockets->erase(i->second->m_SocketID);
       ls->second->m_pAcceptSockets->erase(i->second->m_SocketID);
       CGuard::leaveCS(ls->second->m_AcceptLock);
+
+      // CUDTSocket unlock
+      CGuard::leaveCS(i->second->m_ControlLock);
    }
    self->m_Sockets.clear();
 
@@ -1746,15 +1714,18 @@ void CUDTUnited::updateMux(CUDTSocket* s, const CUDTSocket* ls)
    {
       j->second->m_TimeStamp = 0;
    }
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard::leaveCS(self->m_ControlLock);
 
    while (true)
    {
       self->checkBrokenSockets();
-
+      ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
       CGuard::enterCS(self->m_ControlLock);
+      ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
       bool empty = self->m_ClosedSockets.empty();
       CGuard::leaveCS(self->m_ControlLock);
+      ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
       if (empty)
          break;
@@ -1976,8 +1947,12 @@ int CUDT::getsockopt(UDTSOCKET u, int, UDTOpt optname, void* optval, int* optlen
    try
    {
       CUDT* udt = s_UDTUnited.lookup(u);
-      udt->getOpt(optname, optval, *optlen);
-      return 0;
+      if (udt) {
+    	  udt->getOpt(optname, optval, *optlen);
+    	  return 0;
+      } else {
+    	  return ERROR;
+      }
    }
    catch (CUDTException e)
    {
@@ -1996,8 +1971,12 @@ int CUDT::setsockopt(UDTSOCKET u, int, UDTOpt optname, const void* optval, int o
    try
    {
       CUDT* udt = s_UDTUnited.lookup(u);
-      udt->setOpt(optname, optval, optlen);
-      return 0;
+      if (udt) {
+    	  udt->setOpt(optname, optval, optlen);
+    	  return 0;
+      } else {
+    	  return ERROR;
+      }
    }
    catch (CUDTException e)
    {
@@ -2016,7 +1995,10 @@ int CUDT::send(UDTSOCKET u, const char* buf, int len, int)
    try
    {
       CUDT* udt = s_UDTUnited.lookup(u);
-      return udt->send(buf, len);
+      if (udt)
+    	  return udt->send(buf, len);
+      else
+    	  return ERROR;
    }
    catch (CUDTException e)
    {
@@ -2040,7 +2022,10 @@ int CUDT::recv(UDTSOCKET u, char* buf, int len, int)
    try
    {
       CUDT* udt = s_UDTUnited.lookup(u);
-      return udt->recv(buf, len);
+      if (udt)
+    	  return udt->recv(buf, len);
+      else
+    	  return ERROR;
    }
    catch (CUDTException e)
    {
@@ -2059,7 +2044,10 @@ int CUDT::sendmsg(UDTSOCKET u, const char* buf, int len, int ttl, bool inorder)
    try
    {
       CUDT* udt = s_UDTUnited.lookup(u);
-      return udt->sendmsg(buf, len, ttl, inorder);
+      if (udt)
+    	  return udt->sendmsg(buf, len, ttl, inorder);
+      else
+    	  return ERROR;
    }
    catch (CUDTException e)
    {
@@ -2083,7 +2071,10 @@ int CUDT::recvmsg(UDTSOCKET u, char* buf, int len)
    try
    {
       CUDT* udt = s_UDTUnited.lookup(u);
-      return udt->recvmsg(buf, len);
+      if (udt)
+    	  return udt->recvmsg(buf, len);
+      else
+    	  return ERROR;
    }
    catch (CUDTException e)
    {
@@ -2102,7 +2093,10 @@ int64_t CUDT::sendfile(UDTSOCKET u, fstream& ifs, int64_t& offset, int64_t size,
    try
    {
       CUDT* udt = s_UDTUnited.lookup(u);
-      return udt->sendfile(ifs, offset, size, block);
+      if (udt)
+    	  return udt->sendfile(ifs, offset, size, block);
+      else
+    	  return ERROR;
    }
    catch (CUDTException e)
    {
@@ -2126,7 +2120,10 @@ int64_t CUDT::recvfile(UDTSOCKET u, fstream& ofs, int64_t& offset, int64_t size,
    try
    {
       CUDT* udt = s_UDTUnited.lookup(u);
-      return udt->recvfile(ofs, offset, size, block);
+      if (udt)
+    	  return udt->recvfile(ofs, offset, size, block);
+      else
+    	  return ERROR;
    }
    catch (CUDTException e)
    {
@@ -2334,8 +2331,12 @@ int CUDT::perfmon(UDTSOCKET u, CPerfMon* perf, bool clear)
    try
    {
       CUDT* udt = s_UDTUnited.lookup(u);
-      udt->sample(perf, clear);
-      return 0;
+      if (udt) {
+    	  udt->sample(perf, clear);
+    	  return 0;
+      } else {
+    	  return ERROR;
+      }
    }
    catch (CUDTException e)
    {

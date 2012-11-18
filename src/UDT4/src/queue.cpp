@@ -852,7 +852,7 @@ void CRendezvousQueue::updateConnStatus()
 
 #ifdef EVPIPE_OSFD
             // trigger event pipe
-            CUDT::s_UDTUnited.feedOsfd(i->m_iID);
+            i->m_pUDT->feedOsfd();
 #endif
             continue;
          }
