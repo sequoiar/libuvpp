@@ -52,6 +52,12 @@ written by
       #include <wspiapi.h>
    #endif
 #endif
+
+#include <fcntl.h>
+#include <assert.h>
+#include <errno.h>
+#include <cstring>
+#include <iostream>
 #include <cmath>
 #include <sstream>
 #include "queue.h"
@@ -78,6 +84,128 @@ const int CUDT::m_iVersion = 4;
 const int CUDT::m_iSYNInterval = 10000;
 const int CUDT::m_iSelfClockInterval = 64;
 
+// create Osfd pair
+#ifdef EVPIPE_OSFD
+static void _createOsfd(SYSSOCKET m_evPipe[])
+{
+#ifndef WIN32
+	// create event pipe with socketpair
+	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, m_evPipe) == 0);
+	assert((m_evPipe[0] > 0) && (m_evPipe[1] > 0));
+	// set event pipe non-block
+	int flags = 0, rc = 0;
+
+	fcntl(m_evPipe[0], F_SETFD, FD_CLOEXEC);
+	flags = fcntl(m_evPipe[0], F_GETFL, 0);
+	if (flags == -1) {
+		flags = 0;
+	}
+	rc = fcntl(m_evPipe[0], F_SETFL, flags | O_NONBLOCK); assert(rc != -1);
+
+	fcntl(m_evPipe[1], F_SETFD, FD_CLOEXEC);
+	flags = fcntl(m_evPipe[1], F_GETFL, 0);
+	if (flags == -1) {
+		flags = 0;
+	}
+	rc = fcntl(m_evPipe[1], F_SETFL, flags | O_NONBLOCK); assert(rc != -1);
+#else
+	// create tcp pair as event pipe
+
+	// This function has to be in a system-wide critical section so that
+	// two instances of the library don't accidentally create signaler
+	// crossing the process boundary.
+	// We'll use named event object to implement the critical section.
+	HANDLE sync = CreateEvent (NULL, FALSE, TRUE, "udt-evpipe-sync");
+	assert(sync != NULL);
+
+	// Enter the critical section.
+	DWORD dwrc = WaitForSingleObject(sync, INFINITE);
+	assert(dwrc == WAIT_OBJECT_0);
+
+	// Windows has no 'socketpair' function. CreatePipe is no good as pipe
+	// handles cannot be polled on. Here we create the socketpair by hand.
+	m_evPipe[0] = INVALID_SOCKET;
+	m_evPipe[1] = INVALID_SOCKET;
+
+	// Create listening socket.
+	SOCKET listener;
+	listener = socket(AF_INET, SOCK_STREAM, 0);
+	assert(listener != INVALID_SOCKET);
+
+	// Set SO_REUSEADDR and TCP_NODELAY on listening socket.
+	BOOL so_reuseaddr = 1;
+	int rc = setsockopt(listener, SOL_SOCKET, SO_REUSEADDR,
+			(char *)&so_reuseaddr, sizeof (so_reuseaddr));
+	assert(rc != SOCKET_ERROR);
+	BOOL tcp_nodelay = 1;
+	rc = setsockopt(listener, IPPROTO_TCP, TCP_NODELAY,
+			(char *)&tcp_nodelay, sizeof (tcp_nodelay));
+	assert(rc != SOCKET_ERROR);
+
+	// Bind listening socket to any free local port.
+	// in case failed, we will re-try on the different port. :)
+	struct sockaddr_in addr;
+	memset(&addr, 0, sizeof (addr));
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+	int lp = 5888; // start port to try
+	int re_try = 0;
+	while (1) {
+		addr.sin_port = htons(lp);
+		rc = bind(listener, (const struct sockaddr*) &addr, sizeof (addr));
+
+		// ongoing next port
+		if (re_try > 6) break;
+		lp ++;
+		re_try ++;
+
+		if (rc == SOCKET_ERROR) continue;
+		// Listen for incoming connections.
+		rc = listen(listener, 1);
+		if (rc == SOCKET_ERROR) {
+			continue;
+		} else {
+			break;
+		}
+	}
+	if (re_try > 3) {
+		assert(0);
+	}
+
+	// Create the writer socket.
+	m_evPipe[1] = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0,  0);
+	assert(m_evPipe[1] != INVALID_SOCKET);
+
+	// Set TCP_NODELAY on writer socket.
+	rc = setsockopt(m_evPipe[1], IPPROTO_TCP, TCP_NODELAY,
+			(char *)&tcp_nodelay, sizeof (tcp_nodelay));
+	assert (rc != SOCKET_ERROR);
+
+	// Connect writer to the listener.
+	rc = connect(m_evPipe[1], (sockaddr *) &addr, sizeof (addr));
+	assert (rc != SOCKET_ERROR);
+
+	// Accept connection from writer.
+	m_evPipe[0] = accept(listener, NULL, NULL);
+	assert (m_evPipe[0] != INVALID_SOCKET);
+
+	// We don't need the listening socket anymore. Close it.
+	rc = closesocket(listener);
+	assert (rc != SOCKET_ERROR);
+
+	// Exit the critical section.
+	BOOL brc = SetEvent(sync);
+	assert(brc != 0);
+
+	// set event pipe non-block
+	unsigned long arg = 1;
+	rc = ioctlsocket(m_evPipe[0], FIONBIO, &arg); assert(rc != SOCKET_ERROR);
+	rc = ioctlsocket(m_evPipe[1], FIONBIO, &arg); assert(rc != SOCKET_ERROR);
+#endif
+	///printf("open evPipe fds:%d,%d\n", m_evPipe[0], m_evPipe[1]);
+}
+#endif // Osfd
 
 CUDT::CUDT()
 {
@@ -131,6 +259,11 @@ CUDT::CUDT()
    m_bBroken = false;
    m_bPeerHealth = true;
    m_ullLingerExpiration = 0;
+
+   // event pipe creation
+#ifdef EVPIPE_OSFD
+   _createOsfd(m_evPipe);
+#endif // OSfd
 }
 
 CUDT::CUDT(const CUDT& ancestor)
@@ -184,7 +317,29 @@ CUDT::CUDT(const CUDT& ancestor)
    m_bBroken = false;
    m_bPeerHealth = true;
    m_ullLingerExpiration = 0;
+
+   // event pipe creation
+#ifdef EVPIPE_OSFD
+   _createOsfd(m_evPipe);
+#endif // OSfd
 }
+
+// close Osfd pair
+#ifdef EVPIPE_OSFD
+static void _closeOsfd(SYSSOCKET m_evPipe[])
+{
+	// close event pipe
+	///printf("close evPipe fds:%d,%d\n", m_evPipe[0], m_evPipe[1]);
+#ifndef WIN32
+	close(m_evPipe[1]);
+	close(m_evPipe[0]);
+#else
+	// notes: let user close reading Osfd
+	closesocket(m_evPipe[1]);
+	///closesocket(m_evPipe[0]);
+#endif
+}
+#endif
 
 CUDT::~CUDT()
 {
@@ -204,7 +359,51 @@ CUDT::~CUDT()
    delete m_pPeerAddr;
    delete m_pSNode;
    delete m_pRNode;
+
+   // close Osfd
+#ifdef EVPIPE_OSFD
+   _closeOsfd(m_evPipe);
+#endif // Osfd
 }
+
+///////////////////////////////////////////////////////////////////
+#ifdef EVPIPE_OSFD
+// retrieve m_evPipe[0] OS fd
+SYSSOCKET CUDT::getOsfd()
+{
+	return m_evPipe[0];
+}
+
+// feed OS fd to trigger safe edge event
+// Notes: always guarantee only one byte pending
+static int _feedOsfd(const SYSSOCKET m_evPipe[])
+{
+	char dummy;
+
+#ifndef WIN32
+	// always trigger edge event
+	recv(m_evPipe[0], &dummy, sizeof(dummy), 0);
+	dummy = 0x68;
+	return send(m_evPipe[1], &dummy, sizeof(dummy), 0);
+#else
+	unsigned long nread = -1;
+
+	if ((ioctlsocket(m_evPipe[0], FIONREAD, &nread) == 0) &&
+		(nread == 0)) {
+		dummy = 0x68;
+		return send(m_evPipe[1], &dummy, sizeof(dummy), 0);
+	} else {
+		return 0;
+	}
+#endif
+}
+
+int CUDT::feedOsfd()
+{
+	return _feedOsfd(m_evPipe);
+}
+#endif
+//////////////////////////////////////////////////////////////////////////
 
 void CUDT::setOpt(UDTOpt optName, const void* optval, int)
 {
@@ -212,8 +411,11 @@ void CUDT::setOpt(UDTOpt optName, const void* optval, int)
       throw CUDTException(2, 1, 0);
 
    CGuard cg(m_ConnectionLock);
-   CGuard sendguard(m_SendLock);
-   CGuard recvguard(m_RecvLock);
+
+   // take serial lock
+   CGuard serialguard(m_SerialLock);
+   ///CGuard sendguard(m_SendLock);
+   ///CGuard recvguard(m_RecvLock);
 
    switch (optName)
    {
@@ -353,7 +555,9 @@ void CUDT::setOpt(UDTOpt optName, const void* optval, int)
 
 void CUDT::getOpt(UDTOpt optName, void* optval, int& optlen)
 {
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(m_ConnectionLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    switch (optName)
    {
@@ -452,7 +656,7 @@ void CUDT::getOpt(UDTOpt optName, void* optval, int& optlen)
       {
 		 // take listen socket in
          if ((m_pRcvBuffer && (m_pRcvBuffer->getRcvDataSize() > 0)) ||
-			 ((s_UDTUnited.getStatus(m_SocketID) == LISTENING) && (s_UDTUnited.locate(m_SocketID)->m_pQueuedSockets->size() > 0)))
+			 (m_bListening && (m_pCUDTSocket->m_pQueuedSockets->size() > 0)))
             event |= UDT_EPOLL_IN;
          if (m_pSndBuffer && (m_iSndBufSize > m_pSndBuffer->getCurrBufSize()))
             event |= UDT_EPOLL_OUT;
@@ -480,7 +684,7 @@ void CUDT::getOpt(UDTOpt optName, void* optval, int& optlen)
 
 #ifdef EVPIPE_OSFD
    case UDT_OSFD:
-      *(SYSSOCKET*)optval = s_UDTUnited.getOsfd(m_SocketID);
+      *(SYSSOCKET*)optval = m_evPipe[0];
       optlen = sizeof(SYSSOCKET);
       break;
 #endif
@@ -492,7 +696,9 @@ void CUDT::getOpt(UDTOpt optName, void* optval, int& optlen)
 
 void CUDT::open()
 {
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(m_ConnectionLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    // Initial sequence number, loss, acknowledgement, etc.
    m_iPktSize = m_iMSS - 28;
@@ -557,7 +763,9 @@ void CUDT::open()
 
 void CUDT::listen()
 {
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(m_ConnectionLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    if (!m_bOpened)
       throw CUDTException(5, 0, 0);
@@ -578,7 +786,9 @@ void CUDT::listen()
 
 void CUDT::connect(const sockaddr* serv_addr)
 {
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(m_ConnectionLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    if (!m_bOpened)
       throw CUDTException(5, 0, 0);
@@ -819,7 +1029,7 @@ POST_CONNECT:
 #ifdef EVPIPE_OSFD
    // trigger event pipe
    ///printf("%s.%s.%d, trigger Connected...", __FILE__, __FUNCTION__, __LINE__);
-   s_UDTUnited.feedOsfd(m_SocketID);
+   feedOsfd();
    ///printf("done\n");
 #endif
 
@@ -828,7 +1038,9 @@ POST_CONNECT:
 
 void CUDT::connect(const sockaddr* peer, CHandShake* hs)
 {
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(m_ConnectionLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    // Uses the smaller MSS between the peers        
    if (hs->m_iMSS > m_iMSS)
@@ -967,6 +1179,13 @@ void CUDT::close()
    if (m_bConnected)
       m_pSndQueue->m_pSndUList->remove(this);
 
+#ifdef EVPIPE_OSFD
+   // trigger event pipe to notify closing
+   ///printf("%s.%s.%d, trigger Closing...", __FILE__, __FUNCTION__, __LINE__);
+   ///feedOsfd();
+   ///printf("done\n");
+#endif
+
    // trigger any pending IO events.
    s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_ERR, true);
    // then remove itself from all epoll monitoring
@@ -985,11 +1204,15 @@ void CUDT::close()
    // Inform the threads handler to stop.
    m_bClosing = true;
 
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(m_ConnectionLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
 #ifndef EVPIPE_OSFD
    // Signal the sender and recver if they are waiting for data.
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    releaseSynch();
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 #endif
 
    if (m_bListening)
@@ -1020,10 +1243,18 @@ void CUDT::close()
       m_bConnected = false;
    }
 
+   // take serial lock
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+   CGuard serialguard(m_SerialLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+
 #ifndef EVPIPE_OSFD
    // waiting all send and recv calls to stop
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard sendguard(m_SendLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard recvguard(m_RecvLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 #endif
 
    // CLOSED.
@@ -1044,7 +1275,9 @@ int CUDT::send(const char* data, int len)
    if (len <= 0)
       return 0;
 
-   CGuard sendguard(m_SendLock);
+   // take serial lock
+   CGuard serialguard(m_SerialLock);
+   ///CGuard sendguard(m_SendLock);
 
    if (m_pSndBuffer->getCurrBufSize() == 0)
    {
@@ -1153,7 +1386,10 @@ int CUDT::recv(char* data, int len)
    if (len <= 0)
       return 0;
 
-   CGuard recvguard(m_RecvLock);
+   // take serial lock
+   CGuard serialguard(m_SerialLock);
+
+   ///CGuard recvguard(m_RecvLock);
 
    if (0 == m_pRcvBuffer->getRcvDataSize())
    {
@@ -1243,7 +1479,9 @@ int CUDT::sendmsg(const char* data, int len, int msttl, bool inorder)
    if (len > m_iSndBufSize * m_iPayloadSize)
       throw CUDTException(5, 12, 0);
 
-   CGuard sendguard(m_SendLock);
+   // take serial lock
+   CGuard serialguard(m_SerialLock);
+   ///CGuard sendguard(m_SendLock);
 
    if (m_pSndBuffer->getCurrBufSize() == 0)
    {
@@ -1341,7 +1579,9 @@ int CUDT::recvmsg(char* data, int len)
    if (len <= 0)
       return 0;
 
-   CGuard recvguard(m_RecvLock);
+   // take serial lock
+   CGuard serialguard(m_SerialLock);
+   ///CGuard recvguard(m_RecvLock);
 
    if (m_bBroken || m_bClosing)
    {
@@ -1441,7 +1681,9 @@ int64_t CUDT::sendfile(fstream& ifs, int64_t& offset, int64_t size, int block)
    if (size <= 0)
       return 0;
 
-   CGuard sendguard(m_SendLock);
+   // take serial lock
+   CGuard serialguard(m_SerialLock);
+   ///CGuard sendguard(m_SendLock);
 
    if (m_pSndBuffer->getCurrBufSize() == 0)
    {
@@ -1534,7 +1776,9 @@ int64_t CUDT::recvfile(fstream& ofs, int64_t& offset, int64_t size, int block)
    if (size <= 0)
       return 0;
 
-   CGuard recvguard(m_RecvLock);
+   // take serial lock
+   CGuard serialguard(m_SerialLock);
+   ///CGuard recvguard(m_RecvLock);
 
    int64_t torecv = size;
    int unitsize = block;
@@ -1684,46 +1928,102 @@ void CUDT::CCUpdate()
 void CUDT::initSynch()
 {
    #ifndef WIN32
+	  pthread_mutex_init(&m_SerialLock, NULL);
+
       pthread_mutex_init(&m_SendBlockLock, NULL);
       pthread_cond_init(&m_SendBlockCond, NULL);
       pthread_mutex_init(&m_RecvDataLock, NULL);
       pthread_cond_init(&m_RecvDataCond, NULL);
-      pthread_mutex_init(&m_SendLock, NULL);
-      pthread_mutex_init(&m_RecvLock, NULL);
+      ///pthread_mutex_init(&m_SendLock, NULL);
+      ///pthread_mutex_init(&m_RecvLock, NULL);
       pthread_mutex_init(&m_AckLock, NULL);
       pthread_mutex_init(&m_ConnectionLock, NULL);
    #else
+      m_SerialLock = CreateMutex(NULL, false, NULL);
+
       m_SendBlockLock = CreateMutex(NULL, false, NULL);
       m_SendBlockCond = CreateEvent(NULL, false, false, NULL);
       m_RecvDataLock = CreateMutex(NULL, false, NULL);
       m_RecvDataCond = CreateEvent(NULL, false, false, NULL);
-      m_SendLock = CreateMutex(NULL, false, NULL);
-      m_RecvLock = CreateMutex(NULL, false, NULL);
+      ///m_SendLock = CreateMutex(NULL, false, NULL);
+      ///m_RecvLock = CreateMutex(NULL, false, NULL);
       m_AckLock = CreateMutex(NULL, false, NULL);
       m_ConnectionLock = CreateMutex(NULL, false, NULL);
    #endif
+
+      ///////////////////////////////////
+      // sanity checking on mutex
+      CGuard::enterCS(m_SerialLock);
+      CGuard::leaveCS(m_SerialLock);
+
+      CGuard::enterCS(m_SendBlockLock);
+      CGuard::leaveCS(m_SendBlockLock);
+
+      CGuard::enterCS(m_RecvDataLock);
+      CGuard::leaveCS(m_RecvDataLock);
+
+      ///CGuard::enterCS(m_SendLock);
+      ///CGuard::leaveCS(m_SendLock);
+
+      ///CGuard::enterCS(m_RecvLock);
+      ///CGuard::leaveCS(m_RecvLock);
+
+      CGuard::enterCS(m_AckLock);
+      CGuard::leaveCS(m_AckLock);
+
+      CGuard::enterCS(m_ConnectionLock);
+      CGuard::leaveCS(m_ConnectionLock);
+      ///////////////////////////////////
 }
 
 void CUDT::destroySynch()
 {
+	///////////////////////////////////
+	// sanity checking on mutex
+	CGuard::enterCS(m_SerialLock);
+	CGuard::leaveCS(m_SerialLock);
+
+	CGuard::enterCS(m_SendBlockLock);
+	CGuard::leaveCS(m_SendBlockLock);
+
+	CGuard::enterCS(m_RecvDataLock);
+	CGuard::leaveCS(m_RecvDataLock);
+
+	///CGuard::enterCS(m_SendLock);
+	///CGuard::leaveCS(m_SendLock);
+
+	///CGuard::enterCS(m_RecvLock);
+	///CGuard::leaveCS(m_RecvLock);
+
+	CGuard::enterCS(m_AckLock);
+	CGuard::leaveCS(m_AckLock);
+
+	CGuard::enterCS(m_ConnectionLock);
+	CGuard::leaveCS(m_ConnectionLock);
+	///////////////////////////////////
+
    #ifndef WIN32
       pthread_mutex_destroy(&m_SendBlockLock);
       pthread_cond_destroy(&m_SendBlockCond);
       pthread_mutex_destroy(&m_RecvDataLock);
       pthread_cond_destroy(&m_RecvDataCond);
-      pthread_mutex_destroy(&m_SendLock);
-      pthread_mutex_destroy(&m_RecvLock);
+      ///pthread_mutex_destroy(&m_SendLock);
+      ///pthread_mutex_destroy(&m_RecvLock);
       pthread_mutex_destroy(&m_AckLock);
       pthread_mutex_destroy(&m_ConnectionLock);
+
+      pthread_mutex_destroy(&m_SerialLock);
    #else
       CloseHandle(m_SendBlockLock);
       CloseHandle(m_SendBlockCond);
       CloseHandle(m_RecvDataLock);
       CloseHandle(m_RecvDataCond);
-      CloseHandle(m_SendLock);
-      CloseHandle(m_RecvLock);
+      ///CloseHandle(m_SendLock);
+      ///CloseHandle(m_RecvLock);
       CloseHandle(m_AckLock);
       CloseHandle(m_ConnectionLock);
+
+      CloseHandle(m_SerialLock);
    #endif
 }
 
@@ -1735,25 +2035,31 @@ void CUDT::releaseSynch()
       pthread_cond_signal(&m_SendBlockCond);
       pthread_mutex_unlock(&m_SendBlockLock);
 
-      pthread_mutex_lock(&m_SendLock);
-      pthread_mutex_unlock(&m_SendLock);
+      ///pthread_mutex_lock(&m_SendLock);
+      ///pthread_mutex_unlock(&m_SendLock);
 
       pthread_mutex_lock(&m_RecvDataLock);
       pthread_cond_signal(&m_RecvDataCond);
       pthread_mutex_unlock(&m_RecvDataLock);
 
-      pthread_mutex_lock(&m_RecvLock);
-      pthread_mutex_unlock(&m_RecvLock);
+      ///pthread_mutex_lock(&m_RecvLock);
+      ///pthread_mutex_unlock(&m_RecvLock);
+
+      pthread_mutex_lock(&m_SerialLock);
+      pthread_mutex_unlock(&m_SerialLock);
    #else
       SetEvent(m_SendBlockCond);
 
-      WaitForSingleObject(m_SendLock, INFINITE);
-      ReleaseMutex(m_SendLock);
+      ///WaitForSingleObject(m_SendLock, INFINITE);
+      ///ReleaseMutex(m_SendLock);
 
       SetEvent(m_RecvDataCond);
 
-      WaitForSingleObject(m_RecvLock, INFINITE);
-      ReleaseMutex(m_RecvLock);
+      ///WaitForSingleObject(m_RecvLock, INFINITE);
+      ///ReleaseMutex(m_RecvLock);
+
+      WaitForSingleObject(m_SerialLock, INFINITE);
+      ReleaseMutex(m_SerialLock);
    #endif
 }
 
@@ -1817,7 +2123,7 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
 #ifdef EVPIPE_OSFD
          // trigger event pipe
          ///printf("%s.%s.%d, trigger Sent...", __FILE__, __FUNCTION__, __LINE__);
-         s_UDTUnited.feedOsfd(m_SocketID);
+         feedOsfd();
          ///printf("done\n");
 #endif
       }
@@ -2112,11 +2418,11 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
 #ifdef EVPIPE_OSFD
       // trigger event pipe
       ///printf("%s.%s.%d, trigger Ack...", __FILE__, __FUNCTION__, __LINE__);
-      s_UDTUnited.feedOsfd(m_SocketID);
+      feedOsfd();
       ///printf("done\n");
 #endif
       break;
-      }
+   }
 
    case 6: //110 - Acknowledgement of Acknowledgement
       {
@@ -2256,7 +2562,9 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
 
 #ifndef EVPIPE_OSFD
       // Signal the sender and recver if they are waiting for data.
+      ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
       releaseSynch();
+      ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 #endif
 
       CTimer::triggerEvent();
@@ -2265,7 +2573,7 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
       // trigger event pipe
       // TBD... verify if need to disable it to avoid error event deadlock, when close socket
       ///printf("%s.%s.%d, trigger Shutdown...\n", __FILE__, __FUNCTION__, __LINE__);
-      s_UDTUnited.feedOsfd(m_SocketID);
+      feedOsfd();
       ///printf("done\n");
 #endif
 
@@ -2573,7 +2881,7 @@ int CUDT::listen(sockaddr* addr, CPacket& packet)
 #ifdef EVPIPE_OSFD
             // trigger event pipe
             ///printf("%s.%s.%d, trigger Listened...", __FILE__, __FUNCTION__, __LINE__);
-            s_UDTUnited.feedOsfd(m_SocketID);
+            feedOsfd();
             ///printf("done\n");
 #endif
          }
@@ -2665,9 +2973,9 @@ void CUDT::checkTimers()
 
 #ifdef EVPIPE_OSFD
          // trigger event pipe right here
-         ///printf("%s.%s.%d, trigger Broken3...", __FILE__, __FUNCTION__, __LINE__);
-         s_UDTUnited.feedOsfd(m_SocketID);
-         ///printf("done3\n");
+         ///printf("%s.%s.%d, trigger Broken...", __FILE__, __FUNCTION__, __LINE__);
+         feedOsfd();
+         ///printf("done\n");
 #endif
 
          return;
