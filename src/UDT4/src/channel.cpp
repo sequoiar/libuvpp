@@ -159,9 +159,9 @@ void CChannel::setUDPSockOpt()
    #if defined (BSD) || defined (OSX)
       // Known BSD bug as the day I wrote this code.
       // A small time out value will cause the socket to block forever.
-      tv.tv_usec = 10000;
+      tv.tv_usec = 10000; // 10ms
    #else
-      tv.tv_usec = 100;
+      tv.tv_usec = 10000; // 100us -> 10ms
    #endif
 
    #ifdef UNIX
@@ -170,8 +170,8 @@ void CChannel::setUDPSockOpt()
       int opts = ::fcntl(m_iSocket, F_GETFL);
       if (-1 == ::fcntl(m_iSocket, F_SETFL, opts | O_NONBLOCK))
          throw CUDTException(1, 3, NET_ERROR);
-   #elif WIN32
-      DWORD ot = 1; //milliseconds
+   #elif defined(WIN32)
+      DWORD ot = 10; //1 milliseconds -> 10ms
       if (0 != ::setsockopt(m_iSocket, SOL_SOCKET, SO_RCVTIMEO, (char *)&ot, sizeof(DWORD)))
          throw CUDTException(1, 3, NET_ERROR);
    #else
@@ -298,7 +298,7 @@ int CChannel::recvfrom(sockaddr* addr, CPacket& packet) const
          FD_ZERO(&set);
          FD_SET(m_iSocket, &set);
          tv.tv_sec = 0;
-         tv.tv_usec = 10000;
+         tv.tv_usec = 10000; // 10ms
          ::select(m_iSocket+1, &set, NULL, &set, &tv);
       #endif
 
