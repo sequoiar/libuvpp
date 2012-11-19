@@ -1543,10 +1543,6 @@ void CUDTUnited::updateMux(CUDTSocket* s, const sockaddr* addr, const UDPSOCKET*
    CGuard cg(m_ControlLock);
    ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
-   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
-   CGuard cgs(s->m_ControlLock);
-   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
-
    if ((s->m_pUDT->m_bReuseAddr) && (NULL != addr))
    {
       int port = (AF_INET == s->m_pUDT->m_iIPversion) ? ntohs(((sockaddr_in*)addr)->sin_port) : ntohs(((sockaddr_in6*)addr)->sin6_port);
@@ -1618,10 +1614,6 @@ void CUDTUnited::updateMux(CUDTSocket* s, const CUDTSocket* ls)
 {
    ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(m_ControlLock);
-   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
-
-   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
-   CGuard cgs(s->m_ControlLock);
    ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    int port = (AF_INET == ls->m_iIPversion) ? ntohs(((sockaddr_in*)ls->m_pSelfAddr)->sin_port) : ntohs(((sockaddr_in6*)ls->m_pSelfAddr)->sin6_port);
