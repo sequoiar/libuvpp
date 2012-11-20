@@ -28,7 +28,7 @@
 
 
 #define SERVER_MAX_NUM 10
-#define CLIENT_MAX_NUM 20
+#define CLIENT_MAX_NUM 10
 
 /* Run the benchmark for this many ms */
 #define TIME 20000
