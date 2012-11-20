@@ -196,7 +196,7 @@ static void uv_poll(uv_loop_t* loop, int block) {
                                       &overlapped,
                                       timeout);
 
-  if (success && overlapped) {
+  if (overlapped) {
 	/* sanity checking on socket or handle */
 	if (ioctlsocket((SOCKET)key, FIONREAD, &sflag) == 0) {
       valid = 1;

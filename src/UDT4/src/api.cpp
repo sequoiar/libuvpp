@@ -491,7 +491,7 @@ int CUDTUnited::newConnection(const UDTSOCKET listen, const sockaddr* peer, CHan
 
 #ifdef EVPIPE_OSFD
    // trigger event pipe
-   ns->m_pUDT->feedOsfd();
+   ls->m_pUDT->feedOsfd();
 #endif
 
 ERR_ROLLBACK:
@@ -1318,8 +1318,10 @@ void CUDTUnited::checkBrokenSockets()
                continue;
          }
          else if ((i->second->m_pUDT->m_pRcvBuffer != NULL) && (i->second->m_pUDT->m_pRcvBuffer->getRcvDataSize() > 0) && (i->second->m_pUDT->m_iBrokenCounter -- > 0))
+         {
             // if there is still data in the receiver buffer, wait longer
             continue;
+         }
 
          //close broken connections and start removal timer
          i->second->m_Status = CLOSED;
