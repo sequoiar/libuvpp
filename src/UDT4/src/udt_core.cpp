@@ -1244,8 +1244,9 @@ void CUDT::close()
    }
 
    // take serial lock
+   // notes: bypass it to avoid inter-lock. to be root cause it
    ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
-   CGuard serialguard(m_SerialLock);
+   ///CGuard serialguard(m_SerialLock);
    ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
 #ifndef EVPIPE_OSFD
@@ -1275,9 +1276,11 @@ int CUDT::send(const char* data, int len)
    if (len <= 0)
       return 0;
 
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    // take serial lock
    CGuard serialguard(m_SerialLock);
    ///CGuard sendguard(m_SendLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    if (m_pSndBuffer->getCurrBufSize() == 0)
    {
@@ -1386,8 +1389,10 @@ int CUDT::recv(char* data, int len)
    if (len <= 0)
       return 0;
 
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    // take serial lock
    CGuard serialguard(m_SerialLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    ///CGuard recvguard(m_RecvLock);
 
@@ -1978,30 +1983,6 @@ void CUDT::initSynch()
 
 void CUDT::destroySynch()
 {
-	///////////////////////////////////
-	// sanity checking on mutex
-	CGuard::enterCS(m_SerialLock);
-	CGuard::leaveCS(m_SerialLock);
-
-	CGuard::enterCS(m_SendBlockLock);
-	CGuard::leaveCS(m_SendBlockLock);
-
-	CGuard::enterCS(m_RecvDataLock);
-	CGuard::leaveCS(m_RecvDataLock);
-
-	///CGuard::enterCS(m_SendLock);
-	///CGuard::leaveCS(m_SendLock);
-
-	///CGuard::enterCS(m_RecvLock);
-	///CGuard::leaveCS(m_RecvLock);
-
-	CGuard::enterCS(m_AckLock);
-	CGuard::leaveCS(m_AckLock);
-
-	CGuard::enterCS(m_ConnectionLock);
-	CGuard::leaveCS(m_ConnectionLock);
-	///////////////////////////////////
-
    #ifndef WIN32
       pthread_mutex_destroy(&m_SendBlockLock);
       pthread_cond_destroy(&m_SendBlockCond);
