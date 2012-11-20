@@ -221,7 +221,7 @@ int main(int argc, char * argv [])
 			if (argc == 2) {
 				pinger_new(atoi(argv[1])+i);
 			} else {
-				pinger_new(atoi(TEST_PORT)+i);
+				pinger_new(TEST_PORT+i);
 			}
 
 	uv_run(loop);
