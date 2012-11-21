@@ -174,7 +174,7 @@ enum UDT_UDTSTATUS {
 
 // UDT option
 enum UDT_UDTOpt {
-	UDT_UDT_MSS,             // the Maximum Transfer Unit
+	UDT_UDT_MSS = 0,         // the Maximum Transfer Unit
 	UDT_UDT_SNDSYN,          // if sending is blocking
 	UDT_UDT_RCVSYN,          // if receiving is blocking
 	UDT_UDT_CC,              // custom congestion control algorithm
@@ -196,6 +196,13 @@ enum UDT_UDTOpt {
 	UDT_UDT_SNDDATA,         // size of data in the sending buffer
 	UDT_UDT_RCVDATA,         // size of data available for recv
 	UDT_UDT_OSFD             // OS fd associated with the UDT socket, read only.
+};
+
+// UDT CCC option
+enum UDT_CCCOpt {
+	UDT_CCC_UDT = 0,         // native UDT cc
+	UDT_CCC_TCP,             // TCP-like cc
+	UDT_CCC_BLAST,           // blast cc
 };
 
 // UDT error code
@@ -318,6 +325,9 @@ UDT_API extern int udt_perfmon(UDTSOCKET u, UDT_TRACEINFO * perf, int clear);
 
 // get UDT socket state
 UDT_API extern int udt_getsockstate(UDTSOCKET u);
+
+// set UDT congestion control algorithm
+UDT_API extern int udt_setccc(UDTSOCKET u, int ccc);
 
 // event mechanism
 // select and selectEX are DEPRECATED; please use epoll.

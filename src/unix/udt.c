@@ -540,6 +540,12 @@ int udt__socket(int domain, int type, int protocol) {
 	if (sockfd == -1)
 		goto out;
 
+	/* Set UDT congestion control algorithms */
+	if (udt_setccc(sockfd, UDT_CCC_UDT)) {
+		udt_close(sockfd);
+		sockfd = -1;
+	}
+
 	if (udt__nonblock(sockfd, 1)) {
 		udt_close(sockfd);
 		sockfd = -1;

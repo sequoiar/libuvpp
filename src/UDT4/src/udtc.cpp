@@ -40,6 +40,7 @@ written by
 #include "udt.h"
 #include "udtc.h"
 #include "common.h"
+#include "cc_cwrapper.h" // congestion control algorithms
 
 
 extern "C" {
@@ -349,6 +350,37 @@ int udt_getsockstate(UDTSOCKET u)
 	case     CLOSED: return UDT_CLOSED;
 	case   NONEXIST: return UDT_NONEXIST;
 	        default: return UDT_NONEXIST;
+	}
+}
+
+// congestion control algorithm
+int udt_setccc(UDTSOCKET u, int ccc)
+{
+	int rc;
+	CCCFactory<CTCP> tcp;
+	CCCFactory<CUDTCC> udt;
+	CCCFactory<CUDPBlast> blast;
+
+	switch (ccc) {
+	case UDT_CCC_TCP:
+		rc = UDT::setsockopt(u, 0, UDT_CC, &tcp, sizeof(tcp));
+		break;
+
+	case UDT_CCC_BLAST:
+		rc = UDT::setsockopt(u, 0, UDT_CC, &blast, sizeof(blast));
+		break;
+
+	case UDT_CCC_UDT:
+	default:
+		rc = UDT::setsockopt(u, 0, UDT_CC, &udt, sizeof(udt));
+		break;
+	}
+
+	if (rc == UDT::ERROR) {
+		// error happen
+		return -1;
+	} else {
+		return 0;
 	}
 }
 

@@ -292,9 +292,16 @@ static int uv__bind(uv_udt_t* handle,
     assert(udt_getsockopt(handle->udtfd, 0, (int)UDT_UDT_OSFD, &sock, &optlen) == 0);
 
     if (uv_udt_set_socket(handle->loop, handle, sock, 0) == -1) {
-      closesocket(sock);
-      udt_close(handle->udtfd);
-      return -1;
+       closesocket(sock);
+       udt_close(handle->udtfd);
+       return -1;
+    }
+
+    /* Set UDT congestion control algorithms */
+    if (udt_setccc(handle->udtfd, UDT_CCC_UDT) < 0) {
+       closesocket(sock);
+       udt_close(handle->udtfd);
+       return -1;
     }
   }
 
@@ -371,6 +378,13 @@ static int uv__bindfd(
     assert(udt_getsockopt(handle->udtfd, 0, (int)UDT_UDT_OSFD, &sock, &optlen) == 0);
 
     if (uv_udt_set_socket(handle->loop, handle, sock, 0) == -1) {
+      closesocket(sock);
+      udt_close(handle->udtfd);
+      return -1;
+    }
+
+    /* Set UDT congestion control algorithms */
+    if (udt_setccc(handle->udtfd, UDT_CCC_UDT) < 0) {
       closesocket(sock);
       udt_close(handle->udtfd);
       return -1;
