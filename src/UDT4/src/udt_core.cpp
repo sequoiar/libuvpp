@@ -2368,6 +2368,13 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
       // insert this socket to snd list if it is not on the list yet
       m_pSndQueue->m_pSndUList->update(this, false);
 
+#ifdef EVPIPE_OSFD
+      // trigger event pipe
+      ///printf("%s.%s.%d, trigger Ack...", __FILE__, __FUNCTION__, __LINE__);
+      feedOsfd();
+      ///printf("done\n");
+#endif
+
       // Update RTT
       //m_iRTT = *((int32_t *)ctrlpkt.m_pcData + 1);
       //m_iRTTVar = *((int32_t *)ctrlpkt.m_pcData + 2);
@@ -2396,12 +2403,6 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
       ++ m_iRecvACK;
       ++ m_iRecvACKTotal;
 
-#ifdef EVPIPE_OSFD
-      // trigger event pipe
-      ///printf("%s.%s.%d, trigger Ack...", __FILE__, __FUNCTION__, __LINE__);
-      feedOsfd();
-      ///printf("done\n");
-#endif
       break;
    }
 
