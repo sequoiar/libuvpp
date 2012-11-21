@@ -210,19 +210,31 @@ static void pinger_new(int port) {
 
 int main(int argc, char * argv [])
 {
+    int srvNum=1;
+	int clnNum=1;
+	int port = TEST_PORT;
 	int i=0;
 	int j=0;
 	loop = uv_default_loop();
 
 	start_time = uv_now(loop);
 
-	for (i = 0; i < SERVER_MAX_NUM; i++)
-		for (j = 0; j < CLIENT_MAX_NUM; j++)
-			if (argc == 2) {
-				pinger_new(atoi(argv[1])+i);
-			} else {
-				pinger_new(TEST_PORT+i);
-			}
+	if (argc == 4) {
+	    port    = atoi(argv[1]);
+	    srvNum  = atoi(argv[2]);
+		clnNum  = atoi(argv[3]);
+	} else if (argc == 3) {
+	    port   = atoi(argv[1]);
+	    srvNum = atoi(argv[2]);
+	} else if (argc == 2) {
+	    port = atoi(argv[1]);
+	}
+	srvNum = (srvNum < SERVER_MAX_NUM)? srvNum : SERVER_MAX_NUM;
+	clnNum = (clnNum < CLIENT_MAX_NUM)? clnNum : CLIENT_MAX_NUM;
+	
+	for (i = 0; i < srvNum; i++)
+		for (j = 0; j < clnNum; j++)
+		    pinger_new(port+i);
 
 	uv_run(loop);
 
