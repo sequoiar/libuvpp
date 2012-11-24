@@ -181,8 +181,7 @@
             'libraries': [
               '-lws2_32.lib',
               '-lpsapi.lib',
-              '-liphlpapi.lib',
-              '-lwsock32.lib'
+              '-liphlpapi.lib'
             ],
           },
         }, { # Not Windows i.e. POSIX
@@ -411,7 +410,7 @@
             'test/runner-win.c',
             'test/runner-win.h'
           ],
-          'libraries': [ 'ws2_32.lib', 'wsock32.lib' ]
+          'libraries': [ 'ws2_32.lib' ]
         }, { # POSIX
           'defines': [ '_GNU_SOURCE' ],
           'sources': [
@@ -524,7 +523,7 @@
             'test/runner-win.c',
             'test/runner-win.h',
           ],
-          'libraries': [ 'ws2_32.lib', 'wsock32.lib' ]
+          'libraries': [ 'ws2_32.lib' ]
         }, { # POSIX
           'defines': [ '_GNU_SOURCE' ],
           'sources': [
