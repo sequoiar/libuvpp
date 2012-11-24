@@ -192,7 +192,7 @@ int uv_stdio_pipe_server(uv_loop_t* loop, uv_pipe_t* handle, DWORD access,
 
   if (CreateIoCompletionPort(pipeHandle,
                              loop->iocp,
-                             (ULONG_PTR)pipeHandle,
+                             (ULONG_PTR)handle,
                              0) == NULL) {
     uv__set_sys_error(loop, GetLastError());
     err = -1;
@@ -246,7 +246,7 @@ static int uv_set_pipe_handle(uv_loop_t* loop, uv_pipe_t* handle,
     /* Overlapped pipe.  Try to associate with IOCP. */
     if (CreateIoCompletionPort(pipeHandle,
                                loop->iocp,
-                               (ULONG_PTR)pipeHandle,
+                               (ULONG_PTR)handle,
                                0) == NULL) {
       handle->flags |= UV_HANDLE_EMULATE_IOCP;
     }

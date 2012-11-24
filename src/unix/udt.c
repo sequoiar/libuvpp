@@ -242,7 +242,7 @@ out:
 	return status;
 }
 
-int uv__udt_bindfd(uv_udt_t* handle, uv_syssocket_t udpfd) {
+int uv__udt_bindfd(uv_udt_t* handle, uv_os_sock_t udpfd) {
     return uv__bindfd(handle, udpfd);
 }
 /////////////////////////////////////////////////////////////////////////////////

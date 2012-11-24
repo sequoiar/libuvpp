@@ -176,13 +176,61 @@ int uv_udt_init(uv_loop_t* loop, uv_udt_t* handle) {
 }
 
 
+void uv_process_udt_poll_req(
+		uv_loop_t* loop,
+		uv_udt_t* handle,
+		uv_req_t* req);
+
+// clear outstanding udt request
+static void __uv_poll_clear(uv_loop_t* loop, SOCKET sock) {
+	BOOL success;
+	DWORD bytes, timeout = 0;
+	ULONG_PTR key;
+	OVERLAPPED* overlapped;
+	uv_req_t* req;
+	int cnt = 10000; // assume outstanding request to 10000
+
+	while (cnt--) {
+		success = GetQueuedCompletionStatus(
+				loop->iocp,
+				&bytes,
+				&key,
+				&overlapped,
+				timeout);
+
+		if (overlapped) {
+			/* Package was dequeued */
+			req = uv_overlapped_to_req(overlapped);
+
+			if (req->type == UV_UDT_POLL) {
+				if (((uv_udt_t*)req->data)->socket == sock) {
+					///printf("outstanding udt request .\n");
+					break;
+				} else {
+					uv_process_udt_poll_req(loop, (uv_udt_t*)req->data, req);
+				}
+			} else {
+				uv_insert_pending_req(loop, req);
+			}
+
+		} else if ((GetLastError() != WAIT_TIMEOUT) &&
+				   (GetLastError() != ERROR_ABANDONED_WAIT_0)) {
+			/* Serious error */
+			uv_fatal_error(GetLastError(), "GetQueuedCompletionStatus");
+			break;
+		} else {
+			/* Clear outstanding request done */
+			break;
+		}
+	}
+}
+
 void uv_udt_endgame(uv_loop_t* loop, uv_udt_t* handle) {
   int status;
   int sys_error;
   unsigned int i;
   uv_tcp_accept_t* req;
   char dummy;
-
 
 #ifdef UDT_DEBUG
   printf("%s.%d,"
@@ -258,12 +306,12 @@ void uv_udt_endgame(uv_loop_t* loop, uv_udt_t* handle) {
 
     // close Osfd socket
     ///printf("shutdown,%s.%d\n",  __FUNCTION__, __LINE__);
-    if (handle->socket != INVALID_SOCKET) {
-    	while (recv(handle->socket, &dummy, sizeof(dummy), 0) > 0) {
-    		///printf(".");
-    	}
+    {
+    	while (recv(handle->socket, &dummy, sizeof(dummy), 0) > 0);
     	closesocket(handle->socket);
-    	handle->socket = INVALID_SOCKET;
+
+    	// clear possible outstanding IOCP request
+    	__uv_poll_clear(handle->loop, handle->socket);
     }
 
     uv__handle_close(handle);
@@ -410,7 +458,7 @@ static int uv__bindfd(
   return 0;
 }
 
-int uv__udt_bindfd(uv_udt_t* handle, uv_syssocket_t udpfd) {
+int uv__udt_bindfd(uv_udt_t* handle, uv_os_sock_t udpfd) {
     return uv__bindfd(handle, udpfd);
 }
 

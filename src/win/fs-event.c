@@ -220,7 +220,7 @@ int uv_fs_event_init(uv_loop_t* loop, uv_fs_event_t* handle,
 
   if (CreateIoCompletionPort(handle->dir_handle,
                              loop->iocp,
-                             (ULONG_PTR)handle->dir_handle,
+                             (ULONG_PTR)handle,
                              0) == NULL) {
     last_error = GetLastError();
     goto error;

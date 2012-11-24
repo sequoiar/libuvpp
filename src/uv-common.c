@@ -240,7 +240,7 @@ int uv_udt_bind6(uv_udt_t* handle, struct sockaddr_in6 addr) {
 }
 
 
-int uv_udt_bindfd(uv_udt_t* handle, uv_syssocket_t udpfd) {
+int uv_udt_bindfd(uv_udt_t* handle, uv_os_sock_t udpfd) {
   if (handle->type != UV_UDT) {
     uv__set_artificial_error(handle->loop, UV_EFAULT);
     return -1;

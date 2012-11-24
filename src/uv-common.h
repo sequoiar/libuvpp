@@ -77,7 +77,7 @@ int uv__tcp_bind6(uv_tcp_t* handle, struct sockaddr_in6 addr);
 
 int uv__udt_bind(uv_udt_t* handle, struct sockaddr_in addr);
 int uv__udt_bind6(uv_udt_t* handle, struct sockaddr_in6 addr);
-int uv__udt_bindfd(uv_udt_t* handle, uv_syssocket_t udpfd);
+int uv__udt_bindfd(uv_udt_t* handle, uv_os_sock_t udpfd);
 
 int uv__udp_bind(uv_udp_t* handle, struct sockaddr_in addr, unsigned flags);
 int uv__udp_bind6(uv_udp_t* handle, struct sockaddr_in6 addr, unsigned flags);

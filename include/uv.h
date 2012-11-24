@@ -59,10 +59,8 @@ extern "C" {
 
 #if defined(__unix__) || defined(__POSIX__) || defined(__APPLE__)
 # include "uv-private/uv-unix.h"
-typedef int uv_syssocket_t;
 #else
 # include "uv-private/uv-win.h"
-typedef SOCKET uv_syssocket_t;
 #endif
 
 /* Expand this list if necessary. */
@@ -667,7 +665,7 @@ UV_EXTERN int uv_udt_getpeername(uv_udt_t* handle, struct sockaddr* name,
     int* namelen);
 
 /* binding udt socket on existing udp socket/fd */
-UV_EXTERN int uv_udt_bindfd(uv_udt_t* handle, uv_syssocket_t udpfd);
+UV_EXTERN int uv_udt_bindfd(uv_udt_t* handle, uv_os_sock_t udpfd);
 
 /*
  * uv_udt_connect, uv_udt_connect6
