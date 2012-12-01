@@ -501,7 +501,7 @@ int uv_translate_udt_error() {
 	//case ENETUNREACH: return UV_ENETUNREACH;
 
 	//case ERROR_BROKEN_PIPE: return UV_EOF;
-	case UDT_ECONNLOST: return errno = ECONNABORTED;
+	case UDT_ECONNLOST: return errno = EPIPE;
 
 	//case ELOOP: return UV_ELOOP;
 

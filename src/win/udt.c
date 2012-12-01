@@ -1313,8 +1313,7 @@ INLINE static void udt_process_reqs_udtread(uv_loop_t* loop, uv_udt_t* handle) {
 							/* Read buffer was completely empty, report a 0-byte read. */
 							uv__set_sys_error(loop, WSAEWOULDBLOCK);
 							handle->read_cb((uv_stream_t*)handle, bytes, buf);
-						} else if (0/*(err == WSAECONNABORTED) ||
-								   (err == WSAENOTSOCK)*/) {
+						} else if (err == ERROR_BROKEN_PIPE) {
 							/* Connection closed or socket broken as EOF*/
 							if (handle->flags & UV_HANDLE_READING) {
 								handle->flags &= ~UV_HANDLE_READING;
@@ -2041,7 +2040,7 @@ int uv_translate_udt_error() {
 
 	//case ENETUNREACH: return UV_ENETUNREACH;
 	//case ERROR_BROKEN_PIPE: return UV_EOF;
-	case UDT_ECONNLOST: return WSAECONNABORTED;
+	case UDT_ECONNLOST: return ERROR_BROKEN_PIPE;
 
 	//case ELOOP: return UV_ELOOP;
 

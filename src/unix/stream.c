@@ -747,8 +747,7 @@ static void uv__read(uv_stream_t* stream) {
     			}
 
     			return;
-    		} else if (0/*(udterr == ECONNABORTED) ||
-    				   (udterr == ENOTSOCK)*/) {
+    		} else if (udterr == EPIPE) {
                 // socket broken as EOF
 
         		/* EOF */
