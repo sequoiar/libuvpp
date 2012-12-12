@@ -987,6 +987,7 @@ void CRcvQueue::init(int qsize, int payload, int version, int hsize, CChannel* c
    sockaddr* addr = (AF_INET == self->m_UnitQueue.m_iIPversion) ? (sockaddr*) new sockaddr_in : (sockaddr*) new sockaddr_in6;
    CUDT* u = NULL;
    int32_t id;
+   ///static int32_t hpcnt = 0;
 
    while (!self->m_bClosing)
    {
@@ -1029,6 +1030,15 @@ void CRcvQueue::init(int qsize, int payload, int version, int hsize, CChannel* c
       // ID 0 is for connection request, which should be passed to the listening socket or rendezvous sockets
       if (0 == id)
       {
+    	 ////////////////////////////////////////////////////////////
+    	 // Hole punching packet reuse keep-alive packet with id == 0
+    	 // TBD...DOS defense
+    	 if (unit->m_Packet.getType() == 1) {
+             ///if ((hpcnt++ % 16) == 0) printf("Ignore hole punching packet...\n");
+             goto TIMER_CHECK;
+    	 }
+    	 ////////////////////////////////////////////////////////////
+
          if (NULL != self->m_pListener)
             self->m_pListener->listen(addr, unit->m_Packet);
          else if (NULL != (u = self->m_pRendezvousQueue->retrieve(addr, id)))

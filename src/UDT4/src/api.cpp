@@ -811,6 +811,74 @@ UDTSOCKET CUDTUnited::accept(const UDTSOCKET listen, sockaddr* addr, int* addrle
    return u;
 }
 
+int CUDTUnited::punchhole(const UDTSOCKET u, const sockaddr* name, int namelen)
+{
+   CUDTSocket* s = locate(u);
+   if (NULL == s) {
+      throw CUDTException(5, 4, 0);
+      return 0;
+   }
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+   CGuard cg(s->m_ControlLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+
+   // check the size of SOCKADDR structure
+   if (AF_INET == s->m_iIPversion)
+   {
+      if (namelen != sizeof(sockaddr_in))
+         throw CUDTException(5, 3, 0);
+   }
+   else
+   {
+      if (namelen != sizeof(sockaddr_in6))
+         throw CUDTException(5, 3, 0);
+   }
+
+   // a socket can "connect" only if it is in INIT or OPENED status
+   if (INIT == s->m_Status)
+   {
+      if (!s->m_pUDT->m_bRendezvous)
+      {
+         s->m_pUDT->open();
+         updateMux(s);
+         s->m_Status = OPENED;
+      }
+      else
+         throw CUDTException(5, 8, 0);
+   }
+   else if (OPENED != s->m_Status)
+      throw CUDTException(5, 2, 0);
+
+   // connect_complete() may be called before connect() returns.
+   // So we need to update the status before connect() is called,
+   // otherwise the status may be overwritten with wrong value (CONNECTED vs. CONNECTING).
+   ///s->m_Status = CONNECTING;
+   try
+   {
+      s->m_pUDT->punchhole(name);
+   }
+   catch (CUDTException e)
+   {
+      s->m_Status = OPENED;
+      throw e;
+   }
+
+   // record peer address
+   delete s->m_pPeerAddr;
+   if (AF_INET == s->m_iIPversion)
+   {
+      s->m_pPeerAddr = (sockaddr*)(new sockaddr_in);
+      memcpy(s->m_pPeerAddr, name, sizeof(sockaddr_in));
+   }
+   else
+   {
+      s->m_pPeerAddr = (sockaddr*)(new sockaddr_in6);
+      memcpy(s->m_pPeerAddr, name, sizeof(sockaddr_in6));
+   }
+
+   return 0;
+}
+
 int CUDTUnited::connect(const UDTSOCKET u, const sockaddr* name, int namelen)
 {
    CUDTSocket* s = locate(u);
@@ -1819,6 +1887,29 @@ UDTSOCKET CUDT::accept(UDTSOCKET u, sockaddr* addr, int* addrlen)
    }
 }
 
+int CUDT::punchhole(UDTSOCKET u, const sockaddr* name, int namelen)
+{
+   try
+   {
+      return s_UDTUnited.punchhole(u, name, namelen);
+   }
+   catch (CUDTException e)
+   {
+      s_UDTUnited.setError(new CUDTException(e));
+      return ERROR;
+   }
+   catch (bad_alloc&)
+   {
+      s_UDTUnited.setError(new CUDTException(3, 2, 0));
+      return ERROR;
+   }
+   catch (...)
+   {
+      s_UDTUnited.setError(new CUDTException(-1, 0, 0));
+      return ERROR;
+   }
+}
+
 int CUDT::connect(UDTSOCKET u, const sockaddr* name, int namelen)
 {
    try
@@ -2373,6 +2464,11 @@ UDTSOCKET accept(UDTSOCKET u, struct sockaddr* addr, int* addrlen)
 int connect(UDTSOCKET u, const struct sockaddr* name, int namelen)
 {
    return CUDT::connect(u, name, namelen);
+}
+
+int punchhole(UDTSOCKET u, const struct sockaddr* name, int namelen)
+{
+   return CUDT::punchhole(u, name, namelen);
 }
 
 int close(UDTSOCKET u)

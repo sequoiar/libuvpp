@@ -228,7 +228,7 @@ void CPacket::pack(int pkttype, void* lparam, void* rparam, int size)
   
       break;
 
-   case 1: //0001 - Keep-alive
+   case 1: //0001 - Keep-alive and used to hole punching before connect
       // control info field should be none
       // but "writev" does not allow this
       m_PacketVector[1].iov_base = (char *)&__pad; //NULL;

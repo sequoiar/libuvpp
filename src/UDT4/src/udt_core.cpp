@@ -784,6 +784,35 @@ void CUDT::listen()
    m_bListening = true;
 }
 
+void CUDT::punchhole(const sockaddr* serv_addr)
+{
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+   CGuard cg(m_ConnectionLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+
+   if (!m_bOpened)
+      throw CUDTException(5, 0, 0);
+
+   if (m_bListening)
+      throw CUDTException(5, 2, 0);
+
+   if (m_bConnecting || m_bConnected)
+      throw CUDTException(5, 2, 0);
+
+   // record peer/server address
+   delete m_pPeerAddr;
+   m_pPeerAddr = (AF_INET == m_iIPversion) ? (sockaddr*)new sockaddr_in : (sockaddr*)new sockaddr_in6;
+   memcpy(m_pPeerAddr, serv_addr, (AF_INET == m_iIPversion) ? sizeof(sockaddr_in) : sizeof(sockaddr_in6));
+
+   //////////////////////////////////////////
+   // Send keep-alive packet to punch hole
+   CPacket klpkt; //001 - Keep-alive
+   klpkt.pack(1);
+   klpkt.m_iID = 0;
+   m_pSndQueue->sendto(serv_addr, klpkt);
+   //////////////////////////////////////////
+}
+
 void CUDT::connect(const sockaddr* serv_addr)
 {
    ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);

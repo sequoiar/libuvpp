@@ -1844,12 +1844,29 @@ int uv_udt_setrendez(uv_udt_t* handle, int enable) {
     
     if (handle->socket != INVALID_SOCKET &&
 		udt_setsockopt(handle->udtfd, 0, UDT_UDT_RENDEZVOUS, &rndz, sizeof(rndz)))
-	return -1;
+	    return -1;
 
 	if (enable)
 		handle->flags |= UV_HANDLE_UDT_RENDEZ;
 	else
 		handle->flags &= ~UV_HANDLE_UDT_RENDEZ;
+
+	return 0;
+}
+
+
+int uv_udt_punchhole(uv_udt_t* handle, struct sockaddr_in address) {
+	if (handle->socket != INVALID_SOCKET &&
+        udt_punchhole(handle->udtfd, &address, sizeof(address)))
+		return -1;
+
+	return 0;
+}
+
+int uv_udt_punchhole6(uv_udt_t* handle, struct sockaddr_in6 address) {
+	if (handle->socket != INVALID_SOCKET &&
+        udt_punchhole(handle->udtfd, &address, sizeof(address)))
+		return -1;
 
 	return 0;
 }

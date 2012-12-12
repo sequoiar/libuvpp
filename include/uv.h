@@ -678,6 +678,9 @@ UV_EXTERN int uv_udt_connect(uv_connect_t* req, uv_udt_t* handle,
 UV_EXTERN int uv_udt_connect6(uv_connect_t* req, uv_udt_t* handle,
     struct sockaddr_in6 address, uv_connect_cb cb);
 
+UV_EXTERN int uv_udt_punchhole(uv_udt_t* handle, struct sockaddr_in address);
+UV_EXTERN int uv_udt_punchhole6(uv_udt_t* handle, struct sockaddr_in6 address);
+
 
 /*
  * UDP support.

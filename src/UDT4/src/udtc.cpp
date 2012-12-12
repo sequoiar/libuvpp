@@ -136,6 +136,19 @@ UDTSOCKET udt_accept(UDTSOCKET u, struct sockaddr * addr, int * addrlen)
     }
 }
 
+int udt_punchhole(UDTSOCKET u, const struct sockaddr * name, int namelen)
+{
+    int rc;
+
+    rc = UDT::punchhole(u, name, namelen);
+    if (rc == UDT::ERROR) {
+        // error happen
+        return -1;
+    } else {
+        return 0;
+    }
+}
+
 int udt_connect(UDTSOCKET u, const struct sockaddr * name, int namelen)
 {
     int rc;

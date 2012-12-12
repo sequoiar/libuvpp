@@ -784,6 +784,35 @@ void CUDT::listen()
    m_bListening = true;
 }
 
+void CUDT::punchhole(const sockaddr* serv_addr)
+{
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+   CGuard cg(m_ConnectionLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
+
+   if (!m_bOpened)
+      throw CUDTException(5, 0, 0);
+
+   if (m_bListening)
+      throw CUDTException(5, 2, 0);
+
+   if (m_bConnecting || m_bConnected)
+      throw CUDTException(5, 2, 0);
+
+   // record peer/server address
+   delete m_pPeerAddr;
+   m_pPeerAddr = (AF_INET == m_iIPversion) ? (sockaddr*)new sockaddr_in : (sockaddr*)new sockaddr_in6;
+   memcpy(m_pPeerAddr, serv_addr, (AF_INET == m_iIPversion) ? sizeof(sockaddr_in) : sizeof(sockaddr_in6));
+
+   //////////////////////////////////////////
+   // Send keep-alive packet to punch hole
+   CPacket klpkt; //001 - Keep-alive
+   klpkt.pack(1);
+   klpkt.m_iID = 0;
+   m_pSndQueue->sendto(serv_addr, klpkt);
+   //////////////////////////////////////////
+}
+
 void CUDT::connect(const sockaddr* serv_addr)
 {
    ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
@@ -1244,8 +1273,9 @@ void CUDT::close()
    }
 
    // take serial lock
+   // notes: bypass it to avoid inter-lock. to be root cause it
    ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
-   CGuard serialguard(m_SerialLock);
+   ///CGuard serialguard(m_SerialLock);
    ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
 #ifndef EVPIPE_OSFD
@@ -1275,9 +1305,11 @@ int CUDT::send(const char* data, int len)
    if (len <= 0)
       return 0;
 
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    // take serial lock
    CGuard serialguard(m_SerialLock);
    ///CGuard sendguard(m_SendLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    if (m_pSndBuffer->getCurrBufSize() == 0)
    {
@@ -1386,8 +1418,10 @@ int CUDT::recv(char* data, int len)
    if (len <= 0)
       return 0;
 
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    // take serial lock
    CGuard serialguard(m_SerialLock);
+   ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 
    ///CGuard recvguard(m_RecvLock);
 
@@ -1978,30 +2012,6 @@ void CUDT::initSynch()
 
 void CUDT::destroySynch()
 {
-	///////////////////////////////////
-	// sanity checking on mutex
-	CGuard::enterCS(m_SerialLock);
-	CGuard::leaveCS(m_SerialLock);
-
-	CGuard::enterCS(m_SendBlockLock);
-	CGuard::leaveCS(m_SendBlockLock);
-
-	CGuard::enterCS(m_RecvDataLock);
-	CGuard::leaveCS(m_RecvDataLock);
-
-	///CGuard::enterCS(m_SendLock);
-	///CGuard::leaveCS(m_SendLock);
-
-	///CGuard::enterCS(m_RecvLock);
-	///CGuard::leaveCS(m_RecvLock);
-
-	CGuard::enterCS(m_AckLock);
-	CGuard::leaveCS(m_AckLock);
-
-	CGuard::enterCS(m_ConnectionLock);
-	CGuard::leaveCS(m_ConnectionLock);
-	///////////////////////////////////
-
    #ifndef WIN32
       pthread_mutex_destroy(&m_SendBlockLock);
       pthread_cond_destroy(&m_SendBlockCond);
@@ -2387,6 +2397,13 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
       // insert this socket to snd list if it is not on the list yet
       m_pSndQueue->m_pSndUList->update(this, false);
 
+#ifdef EVPIPE_OSFD
+      // trigger event pipe
+      ///printf("%s.%s.%d, trigger Ack...", __FILE__, __FUNCTION__, __LINE__);
+      feedOsfd();
+      ///printf("done\n");
+#endif
+
       // Update RTT
       //m_iRTT = *((int32_t *)ctrlpkt.m_pcData + 1);
       //m_iRTTVar = *((int32_t *)ctrlpkt.m_pcData + 2);
@@ -2415,12 +2432,6 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
       ++ m_iRecvACK;
       ++ m_iRecvACKTotal;
 
-#ifdef EVPIPE_OSFD
-      // trigger event pipe
-      ///printf("%s.%s.%d, trigger Ack...", __FILE__, __FUNCTION__, __LINE__);
-      feedOsfd();
-      ///printf("done\n");
-#endif
       break;
    }
 

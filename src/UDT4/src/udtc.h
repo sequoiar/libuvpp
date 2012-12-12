@@ -300,6 +300,7 @@ UDT_API extern int udt_bind(UDTSOCKET u, const struct sockaddr* name, int namele
 UDT_API extern int udt_bind2(UDTSOCKET u, UDPSOCKET udpsock);
 UDT_API extern int udt_listen(UDTSOCKET u, int backlog);
 UDT_API extern UDTSOCKET udt_accept(UDTSOCKET u, struct sockaddr* addr, int* addrlen);
+UDT_API extern int udt_punchhole(UDTSOCKET u, const struct sockaddr* name, int namelen);
 UDT_API extern int udt_connect(UDTSOCKET u, const struct sockaddr* name, int namelen);
 UDT_API extern int udt_close(UDTSOCKET u);
 UDT_API extern int udt_getpeername(UDTSOCKET u, struct sockaddr* name, int* namelen);
