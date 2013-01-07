@@ -747,8 +747,8 @@ static void uv__read(uv_stream_t* stream) {
     			}
 
     			return;
-    		} else if (udterr == EPIPE) {
-                // socket broken as EOF
+                } else if ((udterr == EPIPE) || (udterr == ENOTSOCK)) {
+                        // socket broken or invalid socket as EOF
 
         		/* EOF */
         		uv__set_artificial_error(stream->loop, UV_EOF);

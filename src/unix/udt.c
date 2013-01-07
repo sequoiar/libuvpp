@@ -199,7 +199,7 @@ static int uv__bindfd(
 		int domain = AF_INET;
 
 		if (getsockname(udpfd, (struct sockaddr *)&addr, &addrlen) < 0) {
-			uv__set_sys_error(udt->loop, uv_translate_udt_error());
+			uv__set_sys_error(udt->loop, errno);
 			goto out;
 		}
 		domain = addr.ss_family;
