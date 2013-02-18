@@ -24,7 +24,7 @@ ifdef MSVC
 uname_S := MINGW
 endif
 
-CPPFLAGS += -Iinclude -Iinclude/uv-private -Isrc/UDT4/src -DLINUX -DEVPIPE_OSFD
+CPPFLAGS += -Iinclude -Iinclude/uv-private -Isrc/UDT4/src -DEVPIPE_OSFD
 
 CARES_OBJS =
 CARES_OBJS += src/ares/ares__close_sockets.o
@@ -102,10 +102,10 @@ $(CARES_OBJS): %.o: %.c
 	$(CC) -o $*.o -c $(CFLAGS) $(CPPFLAGS) $< -DHAVE_CONFIG_H
 
 $(UDT_OBJS): %.o: %.cpp
-	$(CC) -o $*.o -c $(CFLAGS) $(CPPFLAGS) -DLINUX $< -DHAVE_CONFIG_H
+	$(CC) -o $*.o -c $(CFLAGS) $(CPPFLAGS) $< -DHAVE_CONFIG_H
 
 test/echo-server-udt: test/echo-server-udt.c uv.a
-	$(CC) $(CPPFLAGS) -o test/echo-server-udt test/echo-server-udt.c uv.a -lstdc++ -lpthread -lm -lrt
+	$(CC) $(CPPFLAGS) -o test/echo-server-udt test/echo-server-udt.c uv.a -lstdc++ -lpthread -lm -lrt 
 
 test/echo-client-udt: test/echo-server-udt.c uv.a
 	$(CC) $(CPPFLAGS) -o test/echo-client-udt test/echo-client-udt.c uv.a -lstdc++ -lpthread -lm -lrt

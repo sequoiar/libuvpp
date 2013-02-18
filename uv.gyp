@@ -195,7 +195,6 @@
             '-finline-functions',
             '-fno-strict-aliasing',
             '-fvisibility=hidden',
-            '-DLINUX',
             '-DEVPIPE_OSFD',
             '-frtti',
             '-fexceptions',
@@ -259,7 +258,6 @@
             '_DARWIN_USE_64_BIT_INODE=1',
             'EV_CONFIG_H="config_darwin.h"',
             'EIO_CONFIG_H="config_darwin.h"',
-            'LINUX=1',
             'EVPIPE_OSFD=1',
           ]
         }],
@@ -274,6 +272,7 @@
           'defines': [
             'EV_CONFIG_H="config_linux.h"',
             'EIO_CONFIG_H="config_linux.h"',
+            'LINUX=1'
           ],
           'link_settings': {
             'libraries': [ '-ldl', '-lrt' ],

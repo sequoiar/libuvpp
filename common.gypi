@@ -122,14 +122,14 @@
       }],
       [ 'OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="solaris"', {
         'cflags': [ '-Wall' ],
-        'cflags_cc': [ '-frtti', '-fexceptions', '-DLINUX', '-DEVPIPE_OSFD' ],
+        'cflags_cc': [ '-frtti', '-fexceptions', '-DEVPIPE_OSFD' ],
         'conditions': [
           [ 'host_arch != target_arch and target_arch=="ia32"', {
             'cflags': [ '-m32' ],
             'ldflags': [ '-m32' ],
           }],
           [ 'OS=="linux"', {
-            'cflags': [ '-ansi' ],
+            'cflags': [ '-ansi', '-DLINUX' ],
           }],
           [ 'OS=="solaris"', {
             'cflags': [ '-pthreads' ],
@@ -161,7 +161,6 @@
           'USE_HEADERMAP': 'NO',
           'OTHER_CFLAGS': [
             '-fno-strict-aliasing',
-            '-DLINUX', 
             '-DEVPIPE_OSFD',
           ],
           'WARNING_CFLAGS': [
