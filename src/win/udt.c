@@ -51,7 +51,7 @@ static int uv__udt_keepalive(uv_udt_t* handle, SOCKET socket, int enable, unsign
 
 
 static int uv_udt_set_socket(uv_loop_t* loop, uv_udt_t* handle,
-    SOCKET socket, int imported) {
+    SOCKET socket, int family, int imported) {
   int non_ifs_lsp;
 
   assert(handle->socket == INVALID_SOCKET);
@@ -72,8 +72,11 @@ static int uv_udt_set_socket(uv_loop_t* loop, uv_udt_t* handle,
       return -1;
   }
 
-  non_ifs_lsp = (handle->flags & UV_HANDLE_IPV6) ? uv_tcp_non_ifs_lsp_ipv6 :
-    uv_tcp_non_ifs_lsp_ipv4;
+  if (family == AF_INET6) {
+    non_ifs_lsp = uv_tcp_non_ifs_lsp_ipv6;
+  } else {
+    non_ifs_lsp = uv_tcp_non_ifs_lsp_ipv4;
+  }
 
   if (pSetFileCompletionNotificationModes && !non_ifs_lsp) {
     if (pSetFileCompletionNotificationModes((HANDLE) socket,
@@ -96,6 +99,12 @@ static int uv_udt_set_socket(uv_loop_t* loop, uv_udt_t* handle,
   }
 
   handle->socket = socket;
+
+  if (family == AF_INET6) {
+    handle->flags |= UV_HANDLE_IPV6;
+  } else {
+    assert(!(handle->flags & UV_HANDLE_IPV6));
+  }
 
   return 0;
 }
@@ -271,7 +280,7 @@ void uv_udt_endgame(uv_loop_t* loop, uv_udt_t* handle) {
 
 
 static int uv__bind(uv_udt_t* handle,
-                    int domain,
+                    int family,
                     struct sockaddr* addr,
                     int addrsize) {
   DWORD err;
@@ -280,7 +289,7 @@ static int uv__bind(uv_udt_t* handle,
   int optlen;
 
   if (handle->socket == INVALID_SOCKET) {
-    handle->udtfd = udt_socket(domain, SOCK_STREAM, 0);
+    handle->udtfd = udt_socket(family, SOCK_STREAM, 0);
     if (handle->udtfd < 0) {
       uv__set_sys_error(handle->loop, uv_translate_udt_error());
       return -1;
@@ -289,7 +298,7 @@ static int uv__bind(uv_udt_t* handle,
     // fill Osfd
     assert(udt_getsockopt(handle->udtfd, 0, (int)UDT_UDT_OSFD, &sock, &optlen) == 0);
 
-    if (uv_udt_set_socket(handle->loop, handle, sock, 0) == -1) {
+    if (uv_udt_set_socket(handle->loop, handle, sock, family, 0) == -1) {
        closesocket(sock);
        udt_close(handle->udtfd);
        return -1;
@@ -332,17 +341,10 @@ int uv__udt_bind(uv_udt_t* handle, struct sockaddr_in addr) {
 
 
 int uv__udt_bind6(uv_udt_t* handle, struct sockaddr_in6 addr) {
-  if (uv_allow_ipv6) {
-    handle->flags |= UV_HANDLE_IPV6;
-    return uv__bind(handle,
-                    AF_INET6,
-                    (struct sockaddr*)&addr,
-                    sizeof(struct sockaddr_in6));
-
-  } else {
-    uv__set_sys_error(handle->loop, WSAEAFNOSUPPORT);
-    return -1;
-  }
+  return uv__bind(handle,
+                  AF_INET6,
+                  (struct sockaddr*)&addr,
+                  sizeof(struct sockaddr_in6));
 }
 
 
@@ -355,7 +357,7 @@ static int uv__bindfd(
   int optlen;
   struct sockaddr_storage addr;
   socklen_t addrlen = sizeof(addr);
-  int domain = AF_INET;
+  int family = AF_INET;
 
   if (handle->socket == INVALID_SOCKET) {
     // extract domain info by existing udpfd ///////////////////////////////
@@ -363,10 +365,10 @@ static int uv__bindfd(
 		uv__set_sys_error(handle->loop, WSAGetLastError());
 	    return -1;
     }
-    domain = addr.ss_family;
+    family = addr.ss_family;
     ////////////////////////////////////////////////////////////////////////
 
-    handle->udtfd = udt_socket(domain, SOCK_STREAM, 0);
+    handle->udtfd = udt_socket(family, SOCK_STREAM, 0);
     if (handle->udtfd < 0) {
       uv__set_sys_error(handle->loop, uv_translate_udt_error());
       return -1;
@@ -375,7 +377,7 @@ static int uv__bindfd(
     // fill Osfd
     assert(udt_getsockopt(handle->udtfd, 0, (int)UDT_UDT_OSFD, &sock, &optlen) == 0);
 
-    if (uv_udt_set_socket(handle->loop, handle, sock, 0) == -1) {
+    if (uv_udt_set_socket(handle->loop, handle, sock, family, 0) == -1) {
       closesocket(sock);
       udt_close(handle->udtfd);
       return -1;
@@ -680,6 +682,7 @@ int uv_udt_listen(uv_udt_t* handle, int backlog, uv_connection_cb cb) {
 int uv_udt_accept(uv_udt_t* server, uv_udt_t* client) {
   uv_loop_t* loop = server->loop;
   int rv = 0;
+  int family;
   struct sockaddr_storage saddr;
   int namelen = sizeof saddr;
   int optlen;
@@ -720,7 +723,13 @@ int uv_udt_accept(uv_udt_t* server, uv_udt_t* client) {
   // fill Os fd
   assert(udt_getsockopt(client->udtfd, 0, (int)UDT_UDT_OSFD, &req->accept_socket, &optlen) == 0);
 
-  if (uv_udt_set_socket(client->loop, client, req->accept_socket, 0) == -1) {
+  if (server->flags & UV_HANDLE_IPV6) {
+    family = AF_INET6;
+  } else {
+    family = AF_INET;
+  }
+
+  if (uv_udt_set_socket(client->loop, client, req->accept_socket, family, 0) == -1) {
 	  closesocket(req->accept_socket);
 	  udt_close(client->udtfd);
 	  rv = -1;
@@ -878,11 +887,6 @@ int uv__udt_connect6(uv_connect_t* req,
   uv_buf_t buf;
   int rc, stats;
 
-
-  if (!uv_allow_ipv6) {
-    uv__set_sys_error(loop, WSAEAFNOSUPPORT);
-    return -1;
-  }
 
   if (handle->flags & UV_HANDLE_BIND_ERROR) {
     uv__set_sys_error(loop, handle->bind_error);
