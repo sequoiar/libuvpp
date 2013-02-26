@@ -430,6 +430,20 @@ int uv_udt_punchhole6(uv_udt_t* handle, struct sockaddr_in6 address) {
 	return 0;
 }
 
+int uv_udt_getperf(uv_udt_t* handle, uv_netperf_t* perf, int clear) {
+	UDT_TRACEINFO lperf;
+
+	memset(&lperf, 0, sizeof(lperf));
+	if (handle->fd != -1 &&
+        udt_perfmon(handle->udtfd, &lperf, clear))
+		return -1;
+
+	// transform UDT local performance data
+    // notes: it's same
+    memcpy(perf, &lperf, sizeof(*perf));
+
+	return 0;
+}
 
 /*
     case 0: return UV_OK;

@@ -1875,6 +1875,21 @@ int uv_udt_punchhole6(uv_udt_t* handle, struct sockaddr_in6 address) {
 	return 0;
 }
 
+int uv_udt_getperf(uv_udt_t* handle, uv_netperf_t* perf, int clear) {
+	UDT_TRACEINFO lperf;
+
+	memset(&lperf, 0, sizeof(lperf));
+	if (handle->socket != INVALID_SOCKET &&
+        udt_perfmon(handle->udtfd, &lperf, clear))
+		return -1;
+
+	// transform UDT local performance data
+    // notes: it's same
+    memcpy(perf, &lperf, sizeof(*perf));
+
+	return 0;
+}
+
 
 int uv_udt_duplicate_socket(uv_udt_t* handle, int pid,
 		LPWSAPROTOCOL_INFOW protocol_info) {
