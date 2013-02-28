@@ -41,7 +41,7 @@ written by
 #ifndef __UDT_COMMON_H__
 #define __UDT_COMMON_H__
 
-
+#include "udt.h"
 #ifndef WIN32
    #include <sys/time.h>
    #include <sys/uio.h>
@@ -50,7 +50,6 @@ written by
    #include <windows.h>
 #endif
 #include <cstdlib>
-#include "udt.h"
 
 
 #ifdef WIN32
