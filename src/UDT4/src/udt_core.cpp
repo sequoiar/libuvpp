@@ -2904,6 +2904,8 @@ int CUDT::listen(sockaddr* addr, CPacket& packet)
 
 void CUDT::checkTimers()
 {
+   ///printf("checkTimers\n");
+
    // update CC parameters
    CCUpdate();
    //uint64_t minint = (uint64_t)(m_ullCPUFrequency * m_pSndTimeWindow->getMinPktSndInt() * 0.9);
@@ -3013,13 +3015,31 @@ void CUDT::checkTimers()
       }
       else
       {
-         sendCtrl(1);
+    	 sendCtrl(1);
       }
 
       ++ m_iEXPCount;
       // Reset last response time since we just sent a heart-beat.
       m_ullLastRspTime = currtime;
    }
+
+#ifdef EVPIPE_OSFD
+	// check available recv/send/listening event every timers
+	// notes: timer is 10ms by now
+	if ((m_bConnected && ((m_pRcvBuffer->getRcvDataSize() > 0) && (m_iSockType == UDT_STREAM)) ||
+		                 ((m_pRcvBuffer->getRcvMsgNum() > 0) && (m_iSockType == UDT_DGRAM))) ||
+		(m_bListening && (m_pCUDTSocket->m_pQueuedSockets->size() > 0)))
+	{
+		///printf("%s.%s.%d, trigger recv/listen ...", __FILE__, __FUNCTION__, __LINE__);
+		feedOsfd();
+		///printf("done\n");
+	} else if (m_bConnected && (m_iSndBufSize > m_pSndBuffer->getCurrBufSize()))
+	{
+		///printf("%s.%s.%d, trigger send ...", __FILE__, __FUNCTION__, __LINE__);
+		///feedOsfd();
+		///printf("done\n");
+	}
+#endif
 }
 
 void CUDT::addEPoll(const int eid)

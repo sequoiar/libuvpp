@@ -565,17 +565,40 @@ int uv_translate_udt_error() {
 // UDT socket operation
 int udt__socket(int domain, int type, int protocol) {
 	int sockfd;
+	int optval;
 
 	sockfd = udt_socket(domain, type, protocol);
 
 	if (sockfd == -1)
 		goto out;
 
+    // TBD... optimization on mobile device
 	/* Set UDT congestion control algorithms */
 	if (udt_setccc(sockfd, UDT_CCC_UDT)) {
 		udt_close(sockfd);
 		sockfd = -1;
 	}
+
+    /* Set UDT buffer size */
+    // TBD - set maxWindowSize from 25600 to 2560, UDT/UDP buffer from 10M/1M to 1M/100K
+	optval = 25600;
+    if (udt_setsockopt(sockfd, 0, (int)UDT_UDT_FC, (void *)&optval, sizeof(optval))) {
+		udt_close(sockfd);
+		sockfd = -1;
+	}
+    optval = 1024000;
+    if (udt_setsockopt(sockfd, 0, (int)UDT_UDP_SNDBUF, (void *)&optval, sizeof(optval)) |
+    	udt_setsockopt(sockfd, 0, (int)UDT_UDP_RCVBUF, (void *)&optval, sizeof(optval))) {
+		udt_close(sockfd);
+		sockfd = -1;
+	}
+    optval = 10240000;
+    if (udt_setsockopt(sockfd, 0, (int)UDT_UDT_SNDBUF, (void *)&optval, sizeof(optval)) |
+    	udt_setsockopt(sockfd, 0, (int)UDT_UDT_RCVBUF, (void *)&optval, sizeof(optval))) {
+		udt_close(sockfd);
+		sockfd = -1;
+	}
+    ////////////////////////////////////////////////////////////////////////////////////////
 
 	if (udt__nonblock(sockfd, 1)) {
 		udt_close(sockfd);

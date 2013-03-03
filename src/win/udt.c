@@ -286,7 +286,7 @@ static int uv__bind(uv_udt_t* handle,
   DWORD err;
   int r;
   SOCKET sock;
-  int optlen;
+  int optlen, optval;
 
   if (handle->socket == INVALID_SOCKET) {
     handle->udtfd = udt_socket(family, SOCK_STREAM, 0);
@@ -304,12 +304,37 @@ static int uv__bind(uv_udt_t* handle,
        return -1;
     }
 
+    // TBD... optimization on mobile device
     /* Set UDT congestion control algorithms */
     if (udt_setccc(handle->udtfd, UDT_CCC_UDT) < 0) {
        closesocket(sock);
        udt_close(handle->udtfd);
        return -1;
     }
+
+    /* Set UDT buffer size */
+    // TBD - set maxWindowSize from 25600 to 2560, UDT/UDP buffer from 10M/1M to 1M/100K
+    optval = 25600;
+    if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_FC, (void *)&optval, sizeof(optval))) {
+       closesocket(sock);
+       udt_close(handle->udtfd);
+       return -1;
+    }
+    optval = 1024000;
+    if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDP_SNDBUF, (void *)&optval, sizeof(optval)) |
+    	udt_setsockopt(handle->udtfd, 0, (int)UDT_UDP_RCVBUF, (void *)&optval, sizeof(optval))) {
+       closesocket(sock);
+       udt_close(handle->udtfd);
+       return -1;
+    }
+    optval = 10240000;
+    if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_SNDBUF, (void *)&optval, sizeof(optval)) |
+    	udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_RCVBUF, (void *)&optval, sizeof(optval))) {
+       closesocket(sock);
+       udt_close(handle->udtfd);
+       return -1;
+    }
+    ///////////////////////////////////////////////////////////////////////////////////////////////
   }
 
   r = udt_bind(handle->udtfd, addr, addrsize);
@@ -354,7 +379,7 @@ static int uv__bindfd(
   DWORD err;
   int r;
   SOCKET sock;
-  int optlen;
+  int optlen, optval;
   struct sockaddr_storage addr;
   socklen_t addrlen = sizeof(addr);
   int family = AF_INET;
@@ -383,12 +408,37 @@ static int uv__bindfd(
       return -1;
     }
 
+    // TBD... optimization on mobile device
     /* Set UDT congestion control algorithms */
     if (udt_setccc(handle->udtfd, UDT_CCC_UDT) < 0) {
       closesocket(sock);
       udt_close(handle->udtfd);
       return -1;
     }
+
+    /* Set UDT buffer size */
+    // TBD - set maxWindowSize from 25600 to 2560, UDT/UDP buffer from 10M/1M to 1M/100K
+    optval = 25600;
+    if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_FC, (void *)&optval, sizeof(optval))) {
+       closesocket(sock);
+       udt_close(handle->udtfd);
+       return -1;
+    }
+    optval = 1024000;
+    if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDP_SNDBUF, (void *)&optval, sizeof(optval)) |
+    	udt_setsockopt(handle->udtfd, 0, (int)UDT_UDP_RCVBUF, (void *)&optval, sizeof(optval))) {
+       closesocket(sock);
+       udt_close(handle->udtfd);
+       return -1;
+    }
+    optval = 10240000;
+    if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_SNDBUF, (void *)&optval, sizeof(optval)) |
+    	udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_RCVBUF, (void *)&optval, sizeof(optval))) {
+       closesocket(sock);
+       udt_close(handle->udtfd);
+       return -1;
+    }
+    ///////////////////////////////////////////////////////////////////////////////////////////////
   }
 
   r = udt_bind2(handle->udtfd, udpfd);
@@ -1054,6 +1104,13 @@ INLINE static void udt_process_reqs_udtwrite(uv_loop_t* loop, uv_udt_t* handle) 
 					if (next == 0) break;
 				}
 
+#ifdef UDT_DEBUG
+				printf("%s:%d, sent bytes:%d, queue bytes:%d\n",
+						__FUNCTION__, __LINE__,
+						n,
+						req->queued_bytes );
+#endif
+
 				// 2. then queue write request with the rest of buffer
 				if (n == -1) {
 					// nothing to send done, queue request with iocp or check errors
@@ -1154,7 +1211,7 @@ INLINE static void udt_process_reqs_udtwrite(uv_loop_t* loop, uv_udt_t* handle) 
 			// exit loops
 			if (stop && !werr) {
 				tail->next_req = req;
-				handle->pending_reqs_tail_udtaccept = tail;
+				handle->pending_reqs_tail_udtwrite = tail;
 				break;
 			}
 		}
@@ -1699,7 +1756,7 @@ int uv_udt_write(uv_loop_t* loop, uv_write_t* req, uv_udt_t* handle,
 		  if (rc < 0) {
 			  next = 0;
 			  break;
-		  } else  {
+		  } else {
 			  if (n == -1) n = 0;
 			  n += rc;
 			  ilen += rc;
