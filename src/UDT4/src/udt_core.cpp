@@ -90,7 +90,10 @@ static void _createOsfd(SYSSOCKET m_evPipe[])
 {
 #ifndef WIN32
 	// create event pipe with socketpair
-	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, m_evPipe) == 0);
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, m_evPipe)) {
+            perror("socketpair creation failure");
+            assert(0);
+        };
 	assert((m_evPipe[0] > 0) && (m_evPipe[1] > 0));
 	// set event pipe non-block
 	int flags = 0, rc = 0;
@@ -3026,9 +3029,9 @@ void CUDT::checkTimers()
 #ifdef EVPIPE_OSFD
 	// check available recv/send/listening event every timers
 	// notes: timer is 10ms by now
-	if ((m_bConnected && ((m_pRcvBuffer->getRcvDataSize() > 0) && (m_iSockType == UDT_STREAM)) ||
-		                 ((m_pRcvBuffer->getRcvMsgNum() > 0) && (m_iSockType == UDT_DGRAM))) ||
-		(m_bListening && (m_pCUDTSocket->m_pQueuedSockets->size() > 0)))
+	if ((m_bConnected && (((m_pRcvBuffer->getRcvDataSize() > 0) && (m_iSockType == UDT_STREAM)) ||
+		              ((m_pRcvBuffer->getRcvMsgNum() > 0) && (m_iSockType == UDT_DGRAM)))) ||
+            (m_bListening && (m_pCUDTSocket->m_pQueuedSockets->size() > 0)))
 	{
 		///printf("%s.%s.%d, trigger recv/listen ...", __FILE__, __FUNCTION__, __LINE__);
 		feedOsfd();
