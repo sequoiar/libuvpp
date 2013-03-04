@@ -259,6 +259,7 @@
             'EV_CONFIG_H="config_darwin.h"',
             'EIO_CONFIG_H="config_darwin.h"',
             'EVPIPE_OSFD=1',
+            'OSX=1',
           ]
         }],
         [ 'OS=="linux"', {

@@ -162,6 +162,7 @@
           'OTHER_CFLAGS': [
             '-fno-strict-aliasing',
             '-DEVPIPE_OSFD',
+            '-DOSX',
           ],
           'WARNING_CFLAGS': [
             '-Wall',
