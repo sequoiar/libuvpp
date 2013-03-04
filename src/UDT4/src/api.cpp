@@ -1695,12 +1695,12 @@ void CUDTUnited::updateMux(CUDTSocket* s, const CUDTSocket* ls)
          timeval now;
          timespec timeout;
          gettimeofday(&now, 0);
-         timeout.tv_sec = now.tv_sec + 3; // 1s->3s to adapt low speed network
+         timeout.tv_sec = now.tv_sec + 1; // TBD... 1s->3s to adapt low speed network
          timeout.tv_nsec = now.tv_usec * 1000;
 
          pthread_cond_timedwait(&self->m_GCStopCond, &self->m_GCStopLock, &timeout);
       #else
-         WaitForSingleObject(self->m_GCStopCond, 3000); // 1s->3s to adapt low speed network
+         WaitForSingleObject(self->m_GCStopCond, 1000); // TBD... 1s->3s to adapt low speed network
       #endif
    }
 
