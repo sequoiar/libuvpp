@@ -45,6 +45,7 @@ written by
    #include <cerrno>
    #include <cstring>
    #include <cstdlib>
+   #include <sys/ioctl.h>
 #else
    #include <winsock2.h>
    #include <ws2tcpip.h>
@@ -384,11 +385,28 @@ static int _feedOsfd(const SYSSOCKET m_evPipe[])
 	char dummy;
 
 #ifndef WIN32
-	// always trigger edge event
+// UNIX-like OS
+#ifdef EVPIPE_OSFD_EDGE
+	// trigger edge event
 	recv(m_evPipe[0], &dummy, sizeof(dummy), 0);
 	dummy = 0x68;
 	return send(m_evPipe[1], &dummy, sizeof(dummy), 0);
 #else
+	// trigger level event
+        int nread = -1;
+
+	if ((ioctl(m_evPipe[0], FIONREAD, &nread) == 0) &&
+		(nread == 0)) {
+		dummy = 0x68;
+		return send(m_evPipe[1], &dummy, sizeof(dummy), 0);
+	} else {
+		return 0;
+	}
+#endif
+
+#else
+// WINDOWS
+	// trigger level event on windows
 	unsigned long nread = -1;
 
 	if ((ioctlsocket(m_evPipe[0], FIONREAD, &nread) == 0) &&
