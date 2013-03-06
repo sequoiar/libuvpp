@@ -43,6 +43,7 @@ written by
    #include <cstring>
    #include <cerrno>
    #include <unistd.h>
+   #include <stdio.h>
    #ifdef OSX
       #include <mach/mach_time.h>
    #endif
@@ -155,6 +156,35 @@ uint64_t CTimer::readCPUFrequency()
       mach_timebase_info_data_t info;
       mach_timebase_info(&info);
       frequency = info.denom * 1000ULL / info.numer;
+   #elif defined(LINUX)
+      // extract cpu frequency from /proc/cpuinfo
+      float mhz = 0;
+      char  str[256], *p = NULL;
+      int   find = 0;
+      FILE * fd = fopen("/proc/cpuinfo", "r");
+
+      if (fd == NULL) {
+    	  perror("fopen /proc/cpuinfo");
+      } else {
+          while (fgets(str, 256, fd)) {
+              if (strncmp("cpu MHz", str, sizeof("cpu MHz")-1) == 0) {
+                  find = 1;
+                  break;
+              }
+          }          
+          fclose(fd);
+
+          if (find) {
+              p = str; 
+              while (*p++ != ':'); 
+          
+    	      sscanf(p, "%f", &mhz);
+              frequency = (uint64_t)mhz;
+    	      ///printf("linux cpu MHz: %f, %lld\n", mhz, frequency);
+          } else {
+              printf("Warning!!! /proc/cpuinfo cpu MHz unknown\n");
+          }
+      }
    #endif
 
    // Fall back to microsecond if the resolution is not high enough.
