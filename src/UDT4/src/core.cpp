@@ -45,6 +45,7 @@ written by
    #include <cerrno>
    #include <cstring>
    #include <cstdlib>
+   #include <sys/ioctl.h>
 #else
    #include <winsock2.h>
    #include <ws2tcpip.h>
@@ -90,7 +91,10 @@ static void _createOsfd(SYSSOCKET m_evPipe[])
 {
 #ifndef WIN32
 	// create event pipe with socketpair
-	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, m_evPipe) == 0);
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, m_evPipe)) {
+            perror("socketpair creation failure");
+            assert(0);
+        };
 	assert((m_evPipe[0] > 0) && (m_evPipe[1] > 0));
 	// set event pipe non-block
 	int flags = 0, rc = 0;
@@ -381,11 +385,28 @@ static int _feedOsfd(const SYSSOCKET m_evPipe[])
 	char dummy;
 
 #ifndef WIN32
-	// always trigger edge event
+// UNIX-like OS
+#ifdef EVPIPE_OSFD_EDGE
+	// trigger edge event
 	recv(m_evPipe[0], &dummy, sizeof(dummy), 0);
 	dummy = 0x68;
 	return send(m_evPipe[1], &dummy, sizeof(dummy), 0);
 #else
+	// trigger level event
+        int nread = -1;
+
+	if ((ioctl(m_evPipe[0], FIONREAD, &nread) == 0) &&
+		(nread == 0)) {
+		dummy = 0x68;
+		return send(m_evPipe[1], &dummy, sizeof(dummy), 0);
+	} else {
+		return 0;
+	}
+#endif
+
+#else
+// WINDOWS
+	// trigger level event on windows
 	unsigned long nread = -1;
 
 	if ((ioctlsocket(m_evPipe[0], FIONREAD, &nread) == 0) &&
@@ -828,6 +849,8 @@ void CUDT::connect(const sockaddr* serv_addr)
    if (m_bConnecting || m_bConnected)
       throw CUDTException(5, 2, 0);
 
+   m_bConnecting = true;
+
    // record peer/server address
    delete m_pPeerAddr;
    m_pPeerAddr = (AF_INET == m_iIPversion) ? (sockaddr*)new sockaddr_in : (sockaddr*)new sockaddr_in6;
@@ -873,8 +896,6 @@ void CUDT::connect(const sockaddr* serv_addr)
    request.setLength(hs_size);
    m_pSndQueue->sendto(serv_addr, request);
    m_llLastReqTime = CTimer::getTime();
-
-   m_bConnecting = true;
 
    // asynchronous connect, return immediately
    if (!m_bSynRecving)
@@ -2904,6 +2925,8 @@ int CUDT::listen(sockaddr* addr, CPacket& packet)
 
 void CUDT::checkTimers()
 {
+   ///printf("checkTimers\n");
+
    // update CC parameters
    CCUpdate();
    //uint64_t minint = (uint64_t)(m_ullCPUFrequency * m_pSndTimeWindow->getMinPktSndInt() * 0.9);
@@ -3013,13 +3036,31 @@ void CUDT::checkTimers()
       }
       else
       {
-         sendCtrl(1);
+    	 sendCtrl(1);
       }
 
       ++ m_iEXPCount;
       // Reset last response time since we just sent a heart-beat.
       m_ullLastRspTime = currtime;
    }
+
+#ifdef EVPIPE_OSFD
+	// check available recv/send/listening event every timers
+	// notes: timer is 10ms by now
+	if ((m_bConnected && (((m_pRcvBuffer->getRcvDataSize() > 0) && (m_iSockType == UDT_STREAM)) ||
+		              ((m_pRcvBuffer->getRcvMsgNum() > 0) && (m_iSockType == UDT_DGRAM)))) ||
+            (m_bListening && (m_pCUDTSocket->m_pQueuedSockets->size() > 0)))
+	{
+		///printf("%s.%s.%d, trigger recv/listen ...", __FILE__, __FUNCTION__, __LINE__);
+		feedOsfd();
+		///printf("done\n");
+	} else if (m_bConnected && (m_iSndBufSize > m_pSndBuffer->getCurrBufSize()))
+	{
+		///printf("%s.%s.%d, trigger send ...", __FILE__, __FUNCTION__, __LINE__);
+		///feedOsfd();
+		///printf("done\n");
+	}
+#endif
 }
 
 void CUDT::addEPoll(const int eid)
