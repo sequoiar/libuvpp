@@ -152,7 +152,7 @@ enum UDTOpt
    UDT_EVENT,           // current available events associated with the socket
    UDT_SNDDATA,         // size of data in the sending buffer
    UDT_RCVDATA,         // size of data available for recv
-   UDT_OSFD             // OS fd associated with the UDT socket, read only.
+   UDT_OSFD,            // OS fd associated with the UDT socket, read only.
                         // it's mainly used to hook UDT event to another event loop,
                         // for example, integrate UDT socket event mechanism to epoll.
                         // notes: OSFD just notify some event happened, please use getting UDT_EVENT option
@@ -160,6 +160,7 @@ enum UDTOpt
                         // to enable this function, please add -DEVPIPE_OSFD in compile flag.
                         // to get this option, please pass os-specific socket definitions, for example,
                         // in Linux pass int, while in windows pass SOCKET.
+   UDT_QOS              // UDT socket Qos/priority
 };
 
 ////////////////////////////////////////////////////////////////////////////////

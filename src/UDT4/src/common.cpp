@@ -128,7 +128,7 @@ void CTimer::rdtsc(uint64_t &x)
       x = mach_absolute_time();
    #else
       // use system call to read time clock for other archs
-      x = getTime();
+      x = getTime() * s_ullCPUFrequency;
    #endif
 }
 
@@ -160,7 +160,7 @@ uint64_t CTimer::readCPUFrequency()
       // extract cpu frequency from /proc/cpuinfo
       float mhz = 0;
       char  str[256], *p = NULL;
-      int   find = 0;
+      int   find = 0, old = 0;
       FILE * fd = fopen("/proc/cpuinfo", "r");
 
       if (fd == NULL) {
@@ -169,6 +169,13 @@ uint64_t CTimer::readCPUFrequency()
           while (fgets(str, 256, fd)) {
               if (strncmp("cpu MHz", str, sizeof("cpu MHz")-1) == 0) {
                   find = 1;
+                  old = 0;
+                  break;
+              }
+              // old style cpuinfo
+              if (strncmp("clock", str, sizeof("clock")-1) == 0) {
+                  find = 1;
+                  old = 1;
                   break;
               }
           }          
@@ -178,7 +185,11 @@ uint64_t CTimer::readCPUFrequency()
               p = str; 
               while (*p++ != ':'); 
           
-    	      sscanf(p, "%f", &mhz);
+    	      if (old)
+    	    	  sscanf(p, "%fMHz", &mhz);
+    	      else
+    	    	  sscanf(p, "%f", &mhz);
+
               frequency = (uint64_t)mhz;
     	      ///printf("linux cpu MHz: %f, %lld\n", mhz, frequency);
           } else {

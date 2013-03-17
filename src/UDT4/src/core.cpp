@@ -248,6 +248,7 @@ CUDT::CUDT()
    m_iRcvTimeOut = -1;
    m_bReuseAddr = true;
    m_llMaxBW = -1;
+   m_iQos = 0;
 
    m_pCCFactory = new CCCFactory<CUDTCC>;
    m_pCC = NULL;
@@ -306,6 +307,7 @@ CUDT::CUDT(const CUDT& ancestor)
    m_iRcvTimeOut = ancestor.m_iRcvTimeOut;
    m_bReuseAddr = true;	// this must be true, because all accepted sockets shared the same port with the listener
    m_llMaxBW = ancestor.m_llMaxBW;
+   m_iQos = ancestor.m_iQos;
 
    m_pCCFactory = ancestor.m_pCCFactory->clone();
    m_pCC = NULL;
@@ -554,10 +556,14 @@ void CUDT::setOpt(UDTOpt optName, const void* optval, int)
    case UDT_SNDTIMEO: 
       m_iSndTimeOut = *(int*)optval; 
       break; 
-    
+
    case UDT_RCVTIMEO: 
       m_iRcvTimeOut = *(int*)optval; 
       break; 
+
+   case UDT_QOS:
+      m_iQos = *(int*)optval;
+      break;
 
    case UDT_REUSEADDR:
       if (m_bOpened)
@@ -652,6 +658,11 @@ void CUDT::getOpt(UDTOpt optName, void* optval, int& optlen)
       *(int*)optval = m_iRcvTimeOut; 
       optlen = sizeof(int); 
       break; 
+
+   case UDT_QOS:
+      *(int*)optval = m_iQos;
+      optlen = sizeof(int);
+      break;
 
    case UDT_REUSEADDR:
       *(bool *)optval = m_bReuseAddr;
@@ -1414,7 +1425,11 @@ int CUDT::send(const char* data, int len)
    m_pSndBuffer->addBuffer(data, size);
 
    // insert this socket to snd list if it is not on the list yet
-   m_pSndQueue->m_pSndUList->update(this, false);
+   // notes: if it's high priority socket, then reschedule it immediately
+   if (m_iQos)
+	   m_pSndQueue->m_pSndUList->update(this);
+   else
+	   m_pSndQueue->m_pSndUList->update(this, false);
 
    if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize())
    {
@@ -1611,7 +1626,11 @@ int CUDT::sendmsg(const char* data, int len, int msttl, bool inorder)
    m_pSndBuffer->addBuffer(data, len, msttl, inorder);
 
    // insert this socket to the snd list if it is not on the list yet
-   m_pSndQueue->m_pSndUList->update(this, false);
+   // notes: if it's high priority socket, then reschedule it immediately
+   if (m_iQos)
+	   m_pSndQueue->m_pSndUList->update(this);
+   else
+	   m_pSndQueue->m_pSndUList->update(this, false);
 
    if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize())
    {
@@ -1806,7 +1825,11 @@ int64_t CUDT::sendfile(fstream& ifs, int64_t& offset, int64_t size, int block)
       }
 
       // insert this socket to snd list if it is not on the list yet
-      m_pSndQueue->m_pSndUList->update(this, false);
+      // notes: if it's high priority socket, then reschedule it immediately
+      if (m_iQos)
+   	   m_pSndQueue->m_pSndUList->update(this);
+      else
+   	   m_pSndQueue->m_pSndUList->update(this, false);
    }
 
    if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize())
@@ -2416,7 +2439,11 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
       s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, true);
 
       // insert this socket to snd list if it is not on the list yet
-      m_pSndQueue->m_pSndUList->update(this, false);
+      // notes: if it's high priority socket, then reschedule it immediately
+      if (m_iQos)
+   	   m_pSndQueue->m_pSndUList->update(this);
+      else
+   	   m_pSndQueue->m_pSndUList->update(this, false);
 
 #ifdef EVPIPE_OSFD
       // trigger event pipe

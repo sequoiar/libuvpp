@@ -313,21 +313,22 @@ static int uv__bind(uv_udt_t* handle,
     }
 
     /* Set UDT buffer size */
-    // TBD - set maxWindowSize from 25600 to 2560, UDT/UDP buffer from 10M/1M to 1M/100K
-    optval = 25600;
+    // optimization for node.js
+    // - set maxWindowSize from 25600 to 1280, UDT/UDP buffer from 10M/1M to 512K/256K
+    optval = 1280;
     if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_FC, (void *)&optval, sizeof(optval))) {
        closesocket(sock);
        udt_close(handle->udtfd);
        return -1;
     }
-    optval = 1024000;
+    optval = 256000;
     if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDP_SNDBUF, (void *)&optval, sizeof(optval)) |
     	udt_setsockopt(handle->udtfd, 0, (int)UDT_UDP_RCVBUF, (void *)&optval, sizeof(optval))) {
        closesocket(sock);
        udt_close(handle->udtfd);
        return -1;
     }
-    optval = 10240000;
+    optval = 512000;
     if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_SNDBUF, (void *)&optval, sizeof(optval)) |
     	udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_RCVBUF, (void *)&optval, sizeof(optval))) {
        closesocket(sock);
@@ -417,21 +418,22 @@ static int uv__bindfd(
     }
 
     /* Set UDT buffer size */
-    // TBD - set maxWindowSize from 25600 to 2560, UDT/UDP buffer from 10M/1M to 1M/100K
-    optval = 25600;
+    // optimization for node.js
+    // - set maxWindowSize from 25600 to 1280, UDT/UDP buffer from 10M/1M to 512K/256K
+    optval = 1280;
     if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_FC, (void *)&optval, sizeof(optval))) {
        closesocket(sock);
        udt_close(handle->udtfd);
        return -1;
     }
-    optval = 1024000;
+    optval = 256000;
     if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDP_SNDBUF, (void *)&optval, sizeof(optval)) |
     	udt_setsockopt(handle->udtfd, 0, (int)UDT_UDP_RCVBUF, (void *)&optval, sizeof(optval))) {
        closesocket(sock);
        udt_close(handle->udtfd);
        return -1;
     }
-    optval = 10240000;
+    optval = 512000;
     if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_SNDBUF, (void *)&optval, sizeof(optval)) |
     	udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_RCVBUF, (void *)&optval, sizeof(optval))) {
        closesocket(sock);
@@ -1915,6 +1917,21 @@ int uv_udt_setrendez(uv_udt_t* handle, int enable) {
 	return 0;
 }
 
+int uv_udt_setqos(uv_udt_t* handle, int qos) {
+    if (handle->socket != INVALID_SOCKET &&
+        udt_setsockopt(handle->udtfd, 0, UDT_UDT_QOS, &qos, sizeof(qos)))
+	    return -1;
+
+	return 0;
+}
+
+int uv_udt_setmbw(uv_udt_t* handle, int64_t mbw) {
+    if (handle->socket &&
+        udt_setsockopt(handle->udtfd, 0, UDT_UDT_MAXBW, &mbw, sizeof(mbw)))
+	    return -1;
+
+	return 0;
+}
 
 int uv_udt_punchhole(uv_udt_t* handle, struct sockaddr_in address) {
 	if (handle->socket != INVALID_SOCKET &&

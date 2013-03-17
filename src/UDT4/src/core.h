@@ -303,8 +303,9 @@ private: // Options
    bool m_bRendezvous;                          // Rendezvous connection mode
    int m_iSndTimeOut;                           // sending timeout in milliseconds
    int m_iRcvTimeOut;                           // receiving timeout in milliseconds
-   bool m_bReuseAddr;				// reuse an exiting port or not, for UDP multiplexer
-   int64_t m_llMaxBW;				// maximum data transfer rate (threshold)
+   bool m_bReuseAddr;                           // reuse an exiting port or not, for UDP multiplexer
+   int64_t m_llMaxBW;                           // maximum data transfer rate (threshold)
+   int m_iQos;                                  // UDT socket qos/prioriry: 0 - normal, 1 - high priority
 
 private: // congestion control
    CCCVirtualFactory* m_pCCFactory;             // Factory class to create a specific CC instance

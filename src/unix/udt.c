@@ -402,7 +402,8 @@ int uv_udt_simultaneous_accepts(uv_udt_t* handle, int enable) {
 int uv_udt_setrendez(uv_udt_t* handle, int enable) {
     int rndz = enable ? 1 : 0;
     
-    if (handle->fd != -1 && udt_setsockopt(handle->udtfd, 0, UDT_UDT_RENDEZVOUS, &rndz, sizeof(rndz)))
+    if (handle->fd != -1 &&
+        udt_setsockopt(handle->udtfd, 0, UDT_UDT_RENDEZVOUS, &rndz, sizeof(rndz)))
 	    return -1;
 
 	if (enable)
@@ -413,6 +414,21 @@ int uv_udt_setrendez(uv_udt_t* handle, int enable) {
 	return 0;
 }
 
+int uv_udt_setqos(uv_udt_t* handle, int qos) {
+    if (handle->fd != -1 &&
+        udt_setsockopt(handle->udtfd, 0, UDT_UDT_QOS, &qos, sizeof(qos)))
+	    return -1;
+
+	return 0;
+}
+
+int uv_udt_setmbw(uv_udt_t* handle, int64_t mbw) {
+    if (handle->fd != -1 &&
+        udt_setsockopt(handle->udtfd, 0, UDT_UDT_MAXBW, &mbw, sizeof(mbw)))
+	    return -1;
+
+	return 0;
+}
 
 int uv_udt_punchhole(uv_udt_t* handle, struct sockaddr_in address) {
 	if (handle->fd != -1 &&
@@ -573,40 +589,41 @@ int udt__socket(int domain, int type, int protocol) {
 		goto out;
 
     // TBD... optimization on mobile device
-	/* Set UDT congestion control algorithms */
-	if (udt_setccc(sockfd, UDT_CCC_UDT)) {
-		udt_close(sockfd);
-		sockfd = -1;
-	}
+    /* Set UDT congestion control algorithms */
+    if (udt_setccc(sockfd, UDT_CCC_UDT)) {
+        udt_close(sockfd);
+        sockfd = -1;
+    }
 
     /* Set UDT buffer size */
-    // TBD - set maxWindowSize from 25600 to 2560, UDT/UDP buffer from 10M/1M to 1M/100K
-	optval = 25600;
+    // optimization for node.js:
+    // - set maxWindowSize from 25600 to 1280, UDT/UDP buffer from 10M/1M to 512K/256K
+    optval = 1280;
     if (udt_setsockopt(sockfd, 0, (int)UDT_UDT_FC, (void *)&optval, sizeof(optval))) {
-		udt_close(sockfd);
-		sockfd = -1;
-	}
-    optval = 1024000;
+        udt_close(sockfd);
+        sockfd = -1;
+    }
+    optval = 256000;
     if (udt_setsockopt(sockfd, 0, (int)UDT_UDP_SNDBUF, (void *)&optval, sizeof(optval)) |
     	udt_setsockopt(sockfd, 0, (int)UDT_UDP_RCVBUF, (void *)&optval, sizeof(optval))) {
-		udt_close(sockfd);
-		sockfd = -1;
-	}
-    optval = 10240000;
+        udt_close(sockfd);
+        sockfd = -1;
+    }
+    optval = 512000;
     if (udt_setsockopt(sockfd, 0, (int)UDT_UDT_SNDBUF, (void *)&optval, sizeof(optval)) |
     	udt_setsockopt(sockfd, 0, (int)UDT_UDT_RCVBUF, (void *)&optval, sizeof(optval))) {
-		udt_close(sockfd);
-		sockfd = -1;
-	}
+        udt_close(sockfd);
+        sockfd = -1;
+    }
     ////////////////////////////////////////////////////////////////////////////////////////
 
-	if (udt__nonblock(sockfd, 1)) {
-		udt_close(sockfd);
-		sockfd = -1;
-	}
+    if (udt__nonblock(sockfd, 1)) {
+        udt_close(sockfd);
+        sockfd = -1;
+    }
 
 out:
-	return sockfd;
+    return sockfd;
 }
 
 

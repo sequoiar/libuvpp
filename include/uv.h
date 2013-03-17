@@ -657,6 +657,12 @@ UV_EXTERN int uv_udt_keepalive(uv_udt_t* handle, int enable,
 /* Enable/disable UDT socket in rendezvous mode */
 UV_EXTERN int uv_udt_setrendez(uv_udt_t* handle, int enable);
 
+/* set UDT socket qos/priority */
+UV_EXTERN int uv_udt_setqos(uv_udt_t* handle, int qos);
+
+/* set UDT socket maxim bandwidth bytes/second */
+UV_EXTERN int uv_udt_setmbw(uv_udt_t* handle, int64_t mbw);
+
 UV_EXTERN int uv_udt_bind(uv_udt_t* handle, struct sockaddr_in);
 UV_EXTERN int uv_udt_bind6(uv_udt_t* handle, struct sockaddr_in6);
 UV_EXTERN int uv_udt_getsockname(uv_udt_t* handle, struct sockaddr* name,

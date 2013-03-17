@@ -65,8 +65,8 @@ endif
 ifeq (Linux,$(uname_S))
 EV_CONFIG=config_linux.h
 EIO_CONFIG=config_linux.h
-CSTDFLAG += -D_GNU_SOURCE -DLINUX
-CPPFLAGS += -Isrc/ares/config_linux
+CSTDFLAG += -D_GNU_SOURCE 
+CPPFLAGS += -Isrc/ares/config_linux -DLINUX 
 LINKFLAGS+=-ldl -lrt
 OBJS += src/unix/linux/linux-core.o \
         src/unix/linux/inotify.o    \

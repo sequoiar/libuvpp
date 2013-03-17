@@ -1005,11 +1005,12 @@ void CRcvQueue::init(int qsize, int payload, int version, int hsize, CChannel* c
             self->m_pHash->insert(ne->m_SocketID, ne);
          }
       }
-
+      
       // find next available slot for incoming packet
       CUnit* unit = self->m_UnitQueue.getNextAvailUnit();
       if (NULL == unit)
       {
+         ///printf("%s.%s.%d, no space...\n", __FILE__, __FUNCTION__, __LINE__);
          // no space, skip this packet
          CPacket temp;
          temp.m_pcData = new char[self->m_iPayloadSize];
