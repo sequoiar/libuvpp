@@ -430,6 +430,18 @@ int uv_udt_setmbw(uv_udt_t* handle, int64_t mbw) {
 	return 0;
 }
 
+int uv_udt_setmbs(uv_udt_t* handle, int32_t mfc, int32_t mudt, int32_t mudp) {
+    if (handle->fd != -1 &&
+		((mfc  != -1 ? udt_setsockopt(handle->udtfd, 0, UDT_UDT_FC,     &mfc,  sizeof(mfc))  : 0) ||
+		 (mudt != -1 ? udt_setsockopt(handle->udtfd, 0, UDT_UDT_SNDBUF, &mudt, sizeof(mudt)) : 0) ||
+		 (mudt != -1 ? udt_setsockopt(handle->udtfd, 0, UDT_UDT_RCVBUF, &mudt, sizeof(mudt)) : 0) ||
+		 (mudp != -1 ? udt_setsockopt(handle->udtfd, 0, UDT_UDP_SNDBUF, &mudp, sizeof(mudp)) : 0) ||
+		 (mudp != -1 ? udt_setsockopt(handle->udtfd, 0, UDT_UDP_RCVBUF, &mudp, sizeof(mudp)) : 0)))
+	    return -1;
+
+	return 0;
+}
+
 int uv_udt_punchhole(uv_udt_t* handle, struct sockaddr_in address) {
 	if (handle->fd != -1 &&
         udt_punchhole(handle->udtfd, &address, sizeof(address)))
@@ -595,7 +607,7 @@ int udt__socket(int domain, int type, int protocol) {
         sockfd = -1;
     }
 
-    /* Set UDT buffer size */
+    /* Set default UDT buffer size */
     // optimization for node.js:
     // - set maxWindowSize from 25600 to 1280, UDT/UDP buffer from 10M/1M to 512K/256K
     optval = 1280;

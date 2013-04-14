@@ -3069,6 +3069,7 @@ void CUDT::checkTimers()
 
       ++ m_iEXPCount;
       // Reset last response time since we just sent a heart-beat.
+      CTimer::rdtsc(currtime);
       m_ullLastRspTime = currtime;
       ///printf("%s.%s.%d, expiration ... %d:%d\n", __FILE__, __FUNCTION__, __LINE__, m_SocketID, m_iEXPCount);
    }

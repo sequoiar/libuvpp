@@ -1926,8 +1926,20 @@ int uv_udt_setqos(uv_udt_t* handle, int qos) {
 }
 
 int uv_udt_setmbw(uv_udt_t* handle, int64_t mbw) {
-    if (handle->socket &&
+    if (handle->socket != INVALID_SOCKET &&
         udt_setsockopt(handle->udtfd, 0, UDT_UDT_MAXBW, &mbw, sizeof(mbw)))
+	    return -1;
+
+	return 0;
+}
+
+int uv_udt_setmbs(uv_udt_t* handle, int32_t mfc, int32_t mudt, int32_t mudp) {
+    if (handle->socket != INVALID_SOCKET &&
+        ((mfc  != -1 ? udt_setsockopt(handle->udtfd, 0, UDT_UDT_FC,     &mfc,  sizeof(mfc))  : 0) ||
+         (mudt != -1 ? udt_setsockopt(handle->udtfd, 0, UDT_UDT_SNDBUF, &mudt, sizeof(mudt)) : 0) ||
+         (mudt != -1 ? udt_setsockopt(handle->udtfd, 0, UDT_UDT_RCVBUF, &mudt, sizeof(mudt)) : 0) ||
+         (mudp != -1 ? udt_setsockopt(handle->udtfd, 0, UDT_UDP_SNDBUF, &mudp, sizeof(mudp)) : 0) ||
+         (mudp != -1 ? udt_setsockopt(handle->udtfd, 0, UDT_UDP_RCVBUF, &mudp, sizeof(mudp)) : 0)))
 	    return -1;
 
 	return 0;

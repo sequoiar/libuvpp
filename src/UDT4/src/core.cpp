@@ -3010,6 +3010,7 @@ void CUDT::checkTimers()
       // Haven't receive any information from the peer, is it dead?!
       // timeout: at least 16 expirations and must be greater than 10 seconds
       if ((m_iEXPCount > 16) && (currtime - m_ullLastRspTime > 5000000 * m_ullCPUFrequency))
+      ///if ((m_iEXPCount > 32) && (currtime - m_ullLastRspTime > 10000000 * m_ullCPUFrequency))
       {
          //
          // Connection is broken. 
@@ -3068,7 +3069,9 @@ void CUDT::checkTimers()
 
       ++ m_iEXPCount;
       // Reset last response time since we just sent a heart-beat.
+      CTimer::rdtsc(currtime);
       m_ullLastRspTime = currtime;
+      ///printf("%s.%s.%d, expiration ... %d:%d\n", __FILE__, __FUNCTION__, __LINE__, m_SocketID, m_iEXPCount);
    }
 
 #ifdef EVPIPE_OSFD
@@ -3078,14 +3081,14 @@ void CUDT::checkTimers()
 		              ((m_pRcvBuffer->getRcvMsgNum() > 0) && (m_iSockType == UDT_DGRAM)))) ||
             (m_bListening && (m_pCUDTSocket->m_pQueuedSockets->size() > 0)))
 	{
-		///printf("%s.%s.%d, trigger recv/listen ...", __FILE__, __FUNCTION__, __LINE__);
-		feedOsfd();
-		///printf("done\n");
+            ///printf("%s.%s.%d, trigger recv/listen ...", __FILE__, __FUNCTION__, __LINE__);
+            feedOsfd();
+            ///printf("done\n");
 	} else if (m_bConnected && (m_iSndBufSize > m_pSndBuffer->getCurrBufSize()))
 	{
-		///printf("%s.%s.%d, trigger send ...", __FILE__, __FUNCTION__, __LINE__);
-		///feedOsfd();
-		///printf("done\n");
+            ///printf("%s.%s.%d, trigger send ...", __FILE__, __FUNCTION__, __LINE__);
+            ///feedOsfd();
+            ///printf("done\n");
 	}
 #endif
 }

@@ -663,6 +663,9 @@ UV_EXTERN int uv_udt_setqos(uv_udt_t* handle, int qos);
 /* set UDT socket maxim bandwidth bytes/second */
 UV_EXTERN int uv_udt_setmbw(uv_udt_t* handle, int64_t mbw);
 
+/* set UDT socket maxim buffer size */
+UV_EXTERN int uv_udt_setmbs(uv_udt_t* handle, int32_t mfc, int32_t mudt, int32_t mudp);
+
 UV_EXTERN int uv_udt_bind(uv_udt_t* handle, struct sockaddr_in);
 UV_EXTERN int uv_udt_bind6(uv_udt_t* handle, struct sockaddr_in6);
 UV_EXTERN int uv_udt_getsockname(uv_udt_t* handle, struct sockaddr* name,
