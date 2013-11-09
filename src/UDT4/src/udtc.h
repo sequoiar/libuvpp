@@ -1,5 +1,5 @@
 /*****************************************************************************
-Copyright (c) 2010 - 2012, Tom Zhou at zs68j2ee@gmail.com.
+Copyright (c) 2010 - 2012, Tom Zhou at iwebpp@gmail.com.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

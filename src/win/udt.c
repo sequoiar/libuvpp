@@ -1,4 +1,4 @@
-// Copyright tom zhou<zs68j2ee@gmail.com>, 2012.
+// Copyright tom zhou<iwebpp@gmail.com>, 2012.
 
 #include <assert.h>
 
