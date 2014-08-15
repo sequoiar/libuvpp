@@ -296,7 +296,8 @@
           'defines': [
             'EV_CONFIG_H="config_android.h"',
             'EIO_CONFIG_H="config_android.h"',
-            'LINUX=1'
+            'LINUX=1',
+            'ANDROID',
           ],
           'link_settings': {
             'libraries': [ '-ldl' ],
