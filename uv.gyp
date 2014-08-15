@@ -284,7 +284,7 @@
           },
         }],
         [ 'OS=="android"', {
-          'include_dirs': [ 'src/ares/config_linux' ],
+          'include_dirs': [ 'src/ares/config_android' ],
           'sources': [
             'src/unix/linux/linux-core.c',
             'src/unix/linux/inotify.c',
@@ -294,12 +294,12 @@
             'src/unix/android/android-ifaddrs.c',
           ],
           'defines': [
-            'EV_CONFIG_H="config_linux.h"',
-            'EIO_CONFIG_H="config_linux.h"',
+            'EV_CONFIG_H="config_android.h"',
+            'EIO_CONFIG_H="config_android.h"',
             'LINUX=1'
           ],
           'link_settings': {
-            'libraries': [ '-ldl', '-lrt' ],
+            'libraries': [ '-ldl' ],
           },
         }],        
         [ 'OS=="solaris"', {
