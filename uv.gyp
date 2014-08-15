@@ -11,7 +11,8 @@
         'conditions': [
           ['OS=="solaris"', {
             'cflags': [ '-pthreads' ],
-          }, {
+          }],
+          ['OS not in "solaris android"', {
             'cflags': [ '-pthread' ],
           }],
         ],
@@ -242,7 +243,8 @@
             'conditions': [
               ['OS=="solaris"', {
                 'ldflags': [ '-pthreads' ],
-              }, {
+              }],
+              ['OS != "solaris" and OS != "android"', {
                 'ldflags': [ '-pthread' ],
               }],
             ],
@@ -281,6 +283,25 @@
             'libraries': [ '-ldl', '-lrt' ],
           },
         }],
+        [ 'OS=="android"', {
+          'include_dirs': [ 'src/ares/config_linux' ],
+          'sources': [
+            'src/unix/linux/linux-core.c',
+            'src/unix/linux/inotify.c',
+            'src/unix/linux/syscalls.c',
+            'src/unix/linux/syscalls.h',
+            'src/unix/android/pthread-fixes.c',
+            'src/unix/android/android-ifaddrs.c',
+          ],
+          'defines': [
+            'EV_CONFIG_H="config_linux.h"',
+            'EIO_CONFIG_H="config_linux.h"',
+            'LINUX=1'
+          ],
+          'link_settings': {
+            'libraries': [ '-ldl', '-lrt' ],
+          },
+        }],        
         [ 'OS=="solaris"', {
           'include_dirs': [ 'src/ares/config_sunos' ],
           'sources': [ 'src/unix/sunos.c' ],

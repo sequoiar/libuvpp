@@ -120,7 +120,7 @@
           '_CRT_NONSTDC_NO_DEPRECATE',
         ],
       }],
-      [ 'OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="solaris"', {
+      [ 'OS=="android" or OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="solaris"', {
         'cflags': [ '-Wall' ],
         'cflags_cc': [ '-frtti', '-fexceptions', '-DEVPIPE_OSFD' ],
         'conditions': [
@@ -131,10 +131,14 @@
           [ 'OS=="linux"', {
             'cflags': [ '-ansi', '-DLINUX' ],
           }],
+          [ 'OS=="android"', {
+            'cflags': [ '-DLINUX' ],
+          }],          
           [ 'OS=="solaris"', {
             'cflags': [ '-pthreads' ],
             'ldflags': [ '-pthreads' ],
-          }, {
+          }],
+          [ 'OS not in "solaris android"', {
             'cflags': [ '-pthread' ],
             'ldflags': [ '-pthread' ],
           }],
