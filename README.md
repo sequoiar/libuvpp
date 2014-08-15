@@ -93,7 +93,7 @@ checkout GYP into the project tree manually:
 Unix users run
 
     ./gyp_uv -f make
-    make
+    make -C out
 
 Macintosh users run
 
@@ -103,7 +103,7 @@ Macintosh users run
 Android users run
 
     $ source ./android-configure NDK_PATH gyp
-    $ make
+    $ make -C out
 
 
 ## Supported Platforms
