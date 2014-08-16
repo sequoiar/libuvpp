@@ -25,6 +25,11 @@
 #include <process.h>
 #include <windows.h>
 #include <pthread.h>
+
+#ifdef __ANDROID__
+#include <asm/page.h>
+#endif
+
 #define sigset_t int
 #define sigfillset(a)
 #define pthread_sigmask(a,b,c)
