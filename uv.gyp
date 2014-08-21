@@ -23,7 +23,8 @@
   'targets': [
     {
       'target_name': 'uv',
-      'type': '<(library)',
+      'type': 'static_library', 
+      'standalone_static_library': 1, 
       'include_dirs': [
         'include',
         'include/uv-private',
