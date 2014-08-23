@@ -100,10 +100,10 @@ Macintosh users run
     ./gyp_uv -f xcode
     xcodebuild -project uv.xcodeproj -configuration Release -target All
 
-Android users run
+Android users run. notes: please MUST not build with BUILDTYPE=Release
 
     $ source ./android-configure NDK_PATH gyp
-    $ make -C out
+    $ make -C out or make uv -C out
 
 
 ## Supported Platforms
