@@ -93,6 +93,9 @@ void CCC::sendCustomMsg(CPacket& pkt) const
    if (NULL != u)
    {
       pkt.m_iID = u->m_PeerID;
+      if (u->m_pSecMod) {
+          pkt.setMAC(u->m_pSecKey, 16);
+      }
       u->m_pSndQueue->sendto(u->m_pPeerAddr, pkt);
    }
 }

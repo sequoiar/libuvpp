@@ -666,6 +666,9 @@ UV_EXTERN int uv_udt_setmbw(uv_udt_t* handle, int64_t mbw);
 /* set UDT socket maxim buffer size */
 UV_EXTERN int uv_udt_setmbs(uv_udt_t* handle, int32_t mfc, int32_t mudt, int32_t mudp);
 
+/* set UDT socket security mode */
+UV_EXTERN int uv_udt_setsec(uv_udt_t* handle, int32_t mode, unsigned char keybuf[], int32_t keylen);
+
 UV_EXTERN int uv_udt_bind(uv_udt_t* handle, struct sockaddr_in);
 UV_EXTERN int uv_udt_bind6(uv_udt_t* handle, struct sockaddr_in6);
 UV_EXTERN int uv_udt_getsockname(uv_udt_t* handle, struct sockaddr* name,
@@ -687,8 +690,8 @@ UV_EXTERN int uv_udt_connect(uv_connect_t* req, uv_udt_t* handle,
 UV_EXTERN int uv_udt_connect6(uv_connect_t* req, uv_udt_t* handle,
     struct sockaddr_in6 address, uv_connect_cb cb);
 
-UV_EXTERN int uv_udt_punchhole(uv_udt_t* handle, struct sockaddr_in address);
-UV_EXTERN int uv_udt_punchhole6(uv_udt_t* handle, struct sockaddr_in6 address);
+UV_EXTERN int uv_udt_punchhole(uv_udt_t* handle, struct sockaddr_in address, int32_t from, int32_t to);
+UV_EXTERN int uv_udt_punchhole6(uv_udt_t* handle, struct sockaddr_in6 address, int32_t from, int32_t to);
 
 /* UDT network performance track */
 typedef struct uv_netperf_

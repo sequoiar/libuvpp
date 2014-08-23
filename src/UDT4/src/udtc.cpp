@@ -136,11 +136,11 @@ UDTSOCKET udt_accept(UDTSOCKET u, struct sockaddr * addr, int * addrlen)
     }
 }
 
-int udt_punchhole(UDTSOCKET u, const struct sockaddr * name, int namelen)
+int udt_punchhole(UDTSOCKET u, const struct sockaddr * name, int namelen, int from, int to)
 {
     int rc;
 
-    rc = UDT::punchhole(u, name, namelen);
+    rc = UDT::punchhole(u, name, namelen, from, to);
     if (rc == UDT::ERROR) {
         // error happen
         return -1;

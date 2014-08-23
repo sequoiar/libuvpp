@@ -164,7 +164,7 @@ void CChannel::setUDPSockOpt()
       // A small time out value will cause the socket to block forever.
       tv.tv_usec = 10000; // 10ms
    #else
-      tv.tv_usec = 10000; // 100us -> 10ms
+      tv.tv_usec = 100; // 100us -> 10ms -> 100us
    #endif
 
    #ifdef UNIX
@@ -174,7 +174,7 @@ void CChannel::setUDPSockOpt()
       if (-1 == ::fcntl(m_iSocket, F_SETFL, opts | O_NONBLOCK))
          throw CUDTException(1, 3, NET_ERROR);
    #elif defined(WIN32)
-      DWORD ot = 10; // 1 milliseconds -> 10ms
+      DWORD ot = 1; // 1 milliseconds -> 10ms -> 1ms
       if (0 != ::setsockopt(m_iSocket, SOL_SOCKET, SO_RCVTIMEO, (char *)&ot, sizeof(DWORD)))
          throw CUDTException(1, 3, NET_ERROR);
    #else
@@ -237,10 +237,10 @@ int CChannel::sendto(const sockaddr* addr, CPacket& packet) const
          *((uint32_t *)packet.m_pcData + i) = htonl(*((uint32_t *)packet.m_pcData + i));
 
    // convert packet header into network order
-   //for (int j = 0; j < 4; ++ j)
+   //for (int j = 0; j < 5; ++ j)
    //   packet.m_nHeader[j] = htonl(packet.m_nHeader[j]);
    uint32_t* p = packet.m_nHeader;
-   for (int j = 0; j < 4; ++ j)
+   for (int j = 0; j < 5; ++ j)
    {
       *p = htonl(*p);
       ++ p;
@@ -265,10 +265,10 @@ int CChannel::sendto(const sockaddr* addr, CPacket& packet) const
    #endif
 
    // convert back into local host order
-   //for (int k = 0; k < 4; ++ k)
+   //for (int k = 0; k < 5; ++ k)
    //   packet.m_nHeader[k] = ntohl(packet.m_nHeader[k]);
    p = packet.m_nHeader;
-   for (int k = 0; k < 4; ++ k)
+   for (int k = 0; k < 5; ++ k)
    {
       *p = ntohl(*p);
        ++ p;
@@ -324,10 +324,10 @@ int CChannel::recvfrom(sockaddr* addr, CPacket& packet) const
    packet.setLength(res - CPacket::m_iPktHdrSize);
 
    // convert back into local host order
-   //for (int i = 0; i < 4; ++ i)
+   //for (int i = 0; i < 5; ++ i)
    //   packet.m_nHeader[i] = ntohl(packet.m_nHeader[i]);
    uint32_t* p = packet.m_nHeader;
-   for (int i = 0; i < 4; ++ i)
+   for (int i = 0; i < 5; ++ i)
    {
       *p = ntohl(*p);
       ++ p;

@@ -87,7 +87,7 @@ public: //API
    static int bind(UDTSOCKET u, UDPSOCKET udpsock);
    static int listen(UDTSOCKET u, int backlog);
    static UDTSOCKET accept(UDTSOCKET u, sockaddr* addr, int* addrlen);
-   static int punchhole(UDTSOCKET u, const sockaddr* name, int namelen);
+   static int punchhole(UDTSOCKET u, const sockaddr* name, int namelen, int from, int to);
    static int connect(UDTSOCKET u, const sockaddr* name, int namelen);
    static int close(UDTSOCKET u);
    static int getpeername(UDTSOCKET u, sockaddr* name, int* namelen);
@@ -144,7 +144,7 @@ private:
 
    void connect(const sockaddr* peer);
 
-   void punchhole(const sockaddr* peer);
+   void punchhole(const sockaddr* peer, const int from, const int to);
 
       // Functionality:
       //    Process the response handshake packet.
@@ -282,7 +282,7 @@ public:
 private: // Identification
    UDTSOCKET m_SocketID;                        // UDT socket number
    UDTSockType m_iSockType;                     // Type of the UDT connection (SOCK_STREAM or SOCK_DGRAM)
-   UDTSOCKET m_PeerID;				// peer id, for multiplexer
+   UDTSOCKET m_PeerID;                          // peer id, for multiplexer
    static const int m_iVersion;                 // UDT version, for compatibility use
 
 private: // Packet sizes
@@ -400,6 +400,10 @@ private: // Generation and processing of packets
    int processData(CUnit* unit);
    int listen(sockaddr* addr, CPacket& packet);
 
+private: // Security related data
+   int m_pSecMod;               // secure mode: 0-no security,1-authentication control packet,2-authentication both control and data packet
+   unsigned char m_pSecKey[32]; // 256-bit session keys
+
 private: // Trace
    uint64_t m_StartTime;                        // timestamp when the UDT entity is started
    int64_t m_llSentTotal;                       // total number of sent data packets, including retransmissions
@@ -454,6 +458,8 @@ private: // for UDP multiplexer
    CSndQueue* m_pSndQueue;			// packet sending queue
    CRcvQueue* m_pRcvQueue;			// packet receiving queue
    sockaddr* m_pPeerAddr;			// peer address
+   int m_pCookie;                   // connection cookie
+   int m_pPeerChanged;              // peer address changed count
    uint32_t m_piSelfIP[4];			// local UDP IP address
    CSNode* m_pSNode;				// node information for UDT list used in snd queue
    CRNode* m_pRNode;                            // node information for UDT list used in rcv queue

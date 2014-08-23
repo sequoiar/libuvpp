@@ -65,6 +65,7 @@ public:
    int32_t& m_iMsgNo;                   // alias: message number
    int32_t& m_iTimeStamp;               // alias: timestamp
    int32_t& m_iID;                      // alias: socket ID
+   int32_t& m_iMAC;                     // alias: message authentication code
    char*& m_pcData;                     // alias: data/control information
 
    static const int m_iPktHdrSize;	// packet header size
@@ -130,6 +131,33 @@ public:
 
    int getType() const;
 
+	   // Functionality:
+	   //    Read the packet mac.
+	   // Parameters:
+	   //    None.
+	   // Returned value:
+	   //    packet mac 32-bit.
+
+   uint32_t getMAC() const;
+
+	   // Functionality:
+	   //    Calculate and set the packet mac.
+	   // Parameters:
+	   //    None.
+	   // Returned value:
+	   //    packet mac 32-bit.
+
+   int setMAC(const unsigned char* key, const int len);
+
+	   // Functionality:
+	   //    Calculate and check the packet mac.
+	   // Parameters:
+	   //    None.
+	   // Returned value:
+	   //    1 - pass, 0 - fail
+
+	int chkMAC(const unsigned char* key, const int len);
+
       // Functionality:
       //    Read the extended packet type.
       // Parameters:
@@ -185,7 +213,7 @@ public:
    CPacket* clone() const;
 
 protected:
-   uint32_t m_nHeader[4];               // The 128-bit header field
+   uint32_t m_nHeader[5];               // The 128-bit header field + 32-bit MAC
    iovec m_PacketVector[2];             // The 2-demension vector of UDT packet [header, data]
 
    int32_t __pad;

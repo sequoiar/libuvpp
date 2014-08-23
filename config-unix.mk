@@ -74,11 +74,11 @@ OBJS += src/unix/linux/linux-core.o \
 endif
 
 ifeq (Android,$(uname_S))
-EV_CONFIG=config_linux.h
-EIO_CONFIG=config_linux.h
+EV_CONFIG=config_android.h
+EIO_CONFIG=config_android.h
 CSTDFLAG += -D_GNU_SOURCE 
-CPPFLAGS += -Isrc/ares/config_linux -DLINUX 
-LINKFLAGS+=-ldl -lrt
+CPPFLAGS += -Isrc/ares/config_android -DLINUX 
+LINKFLAGS+=-ldl 
 OBJS += src/unix/linux/linux-core.o \
         src/unix/linux/inotify.o    \
         src/unix/linux/syscalls.o   \

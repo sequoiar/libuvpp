@@ -181,11 +181,9 @@
           ],
           'link_settings': {
             'libraries': [
-              '-ladvapi32.lib',
-              '-liphlpapi.lib',
+              '-lws2_32.lib',
               '-lpsapi.lib',
-              '-lshell32.lib',
-              '-lws2_32.lib'
+              '-liphlpapi.lib'
             ],
           },
         }, { # Not Windows i.e. POSIX

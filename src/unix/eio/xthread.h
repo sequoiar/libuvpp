@@ -26,9 +26,7 @@
 #include <windows.h>
 #include <pthread.h>
 
-#ifdef __ANDROID__
-#include <asm/page.h>
-#endif
+
 
 #define sigset_t int
 #define sigfillset(a)
@@ -96,6 +94,10 @@ thread_create (xthread_t *tid, void *(*proc)(void *), void *arg)
 #include <signal.h>
 #include <limits.h>
 #include <pthread.h>
+
+#ifdef __ANDROID__
+#include <asm/page.h>
+#endif
 
 typedef pthread_mutex_t xmutex_t;
 #if __linux && defined (PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP)

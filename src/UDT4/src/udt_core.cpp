@@ -81,7 +81,8 @@ const int32_t CAckNo::m_iMaxAckSeqNo = 0x7FFFFFFF;
 const int32_t CMsgNo::m_iMsgNoTH = 0xFFFFFFF;
 const int32_t CMsgNo::m_iMaxMsgNo = 0x1FFFFFFF;
 
-const int CUDT::m_iVersion = 4;
+///const int CUDT::m_iVersion = 4;
+const int CUDT::m_iVersion = 6; // support authentication on control packet
 const int CUDT::m_iSYNInterval = 10000;
 const int CUDT::m_iSelfClockInterval = 64;
 
@@ -153,14 +154,14 @@ static void _createOsfd(SYSSOCKET m_evPipe[])
 	addr.sin_family = AF_INET;
 	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-	int lp = 5888; // start port to try
+	int lp = 56868; // start port to try
 	int re_try = 0;
 	while (1) {
 		addr.sin_port = htons(lp);
 		rc = bind(listener, (const struct sockaddr*) &addr, sizeof (addr));
 
 		// ongoing next port
-		if (re_try > 6) break;
+		if (re_try > 33) break;
 		lp ++;
 		re_try ++;
 
@@ -172,8 +173,9 @@ static void _createOsfd(SYSSOCKET m_evPipe[])
 		} else {
 			break;
 		}
+		Sleep(33);
 	}
-	if (re_try > 3) {
+	if (re_try > 33) {
 		assert(0);
 	}
 
@@ -227,11 +229,22 @@ CUDT::CUDT()
    m_pSNode = NULL;
    m_pRNode = NULL;
 
+   // Connection cookie, peer IP changed count
+   m_pCookie = -1;
+   m_pPeerChanged = 0;
+
    // Initilize mutex and condition variables
    initSynch();
 
    // Default UDT configurations
-   m_iMSS = 1500;
+  
+   // !!! fixed iMSS to 1492 for RPI, need to root cause /////////////
+   ///m_iMSS = 1500;
+   m_iMSS = 1492;
+   // !!! fixed iMSS to 1488 for MTU of some router, TBD...
+   ///m_iMSS = 1488;
+   ////////////////////////////////////////////////////////////////////  
+ 
    m_bSynSending = true;
    m_bSynRecving = true;
    m_iFlightFlagSize = 25600;
@@ -269,6 +282,10 @@ CUDT::CUDT()
 #ifdef EVPIPE_OSFD
    _createOsfd(m_evPipe);
 #endif // OSfd
+
+   // security state
+   m_pSecMod = 0;
+   memset(m_pSecKey, 0, sizeof(m_pSecKey));
 }
 
 CUDT::CUDT(const CUDT& ancestor)
@@ -328,6 +345,10 @@ CUDT::CUDT(const CUDT& ancestor)
 #ifdef EVPIPE_OSFD
    _createOsfd(m_evPipe);
 #endif // OSfd
+
+   // security state
+   m_pSecMod = 0;
+   memset(m_pSecKey, 0, sizeof(m_pSecKey));
 }
 
 // close Osfd pair
@@ -428,7 +449,7 @@ int CUDT::feedOsfd()
 #endif
 //////////////////////////////////////////////////////////////////////////
 
-void CUDT::setOpt(UDTOpt optName, const void* optval, int)
+void CUDT::setOpt(UDTOpt optName, const void* optval, int optlen)
 {
    if (m_bBroken || m_bClosing)
       throw CUDTException(2, 1, 0);
@@ -574,7 +595,15 @@ void CUDT::setOpt(UDTOpt optName, const void* optval, int)
    case UDT_MAXBW:
       m_llMaxBW = *(int64_t*)optval;
       break;
-    
+
+   case UDT_SECMOD:
+	  m_pSecMod = *(int*)optval;
+      break;
+
+   case UDT_SECKEY:
+	  memcpy(m_pSecKey, optval, (optlen < sizeof(m_pSecKey)) ? optlen : sizeof(m_pSecKey));
+      break;
+
    default:
       throw CUDTException(5, 0, 0);
    }
@@ -721,6 +750,11 @@ void CUDT::getOpt(UDTOpt optName, void* optval, int& optlen)
       break;
 #endif
 
+   case UDT_SECMOD:
+	  *(int32_t*)optval = m_pSecMod;
+	  optlen = sizeof(m_pSecMod);
+	  break;
+
    default:
       throw CUDTException(5, 0, 0);
    }
@@ -816,7 +850,7 @@ void CUDT::listen()
    m_bListening = true;
 }
 
-void CUDT::punchhole(const sockaddr* serv_addr)
+void CUDT::punchhole(const sockaddr* serv_addr, const int from, const int to)
 {
    ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
    CGuard cg(m_ConnectionLock);
@@ -831,18 +865,41 @@ void CUDT::punchhole(const sockaddr* serv_addr)
    if (m_bConnecting || m_bConnected)
       throw CUDTException(5, 2, 0);
 
-   // record peer/server address
-   delete m_pPeerAddr;
-   m_pPeerAddr = (AF_INET == m_iIPversion) ? (sockaddr*)new sockaddr_in : (sockaddr*)new sockaddr_in6;
-   memcpy(m_pPeerAddr, serv_addr, (AF_INET == m_iIPversion) ? sizeof(sockaddr_in) : sizeof(sockaddr_in6));
+   if (AF_INET == m_iIPversion) {
+	   // create temp address
+	   sockaddr_in temp_addr;
+	   memcpy(&temp_addr, serv_addr, sizeof(sockaddr_in));
 
-   //////////////////////////////////////////
-   // Send keep-alive packet to punch hole
-   CPacket klpkt; //001 - Keep-alive
-   klpkt.pack(1);
-   klpkt.m_iID = 0;
-   m_pSndQueue->sendto(serv_addr, klpkt);
-   //////////////////////////////////////////
+	   //////////////////////////////////////////
+	   // Send keep-alive packet to punch hole with port range [from, to]
+	   CPacket klpkt; //001 - Keep-alive
+	   klpkt.m_iID = 0;
+	   klpkt.pack(1);
+
+	   int refport = temp_addr.sin_port;
+	   for (int start = from; start <= to; start ++) {
+		   temp_addr.sin_port = refport + start;
+		   m_pSndQueue->sendto((const sockaddr *)&temp_addr, klpkt);
+	   }
+	   //////////////////////////////////////////
+   } else {
+	   // create temp address
+	   sockaddr_in6 temp_addr;
+	   memcpy(&temp_addr, serv_addr, sizeof(sockaddr_in6));
+
+	   //////////////////////////////////////////
+	   // Send keep-alive packet to punch hole with port range [from, to]
+	   CPacket klpkt; //001 - Keep-alive
+	   klpkt.m_iID = 0;
+	   klpkt.pack(1);
+
+	   int refport = temp_addr.sin6_port;
+	   for (int start = from; start <= to; start ++) {
+		   temp_addr.sin6_port = refport + start;
+		   m_pSndQueue->sendto((const sockaddr *)&temp_addr, klpkt);
+	   }
+	   //////////////////////////////////////////
+   }
 }
 
 void CUDT::connect(const sockaddr* serv_addr)
@@ -897,10 +954,10 @@ void CUDT::connect(const sockaddr* serv_addr)
 
    // Inform the server my configurations.
    CPacket request;
-   char* reqdata = new char [m_iPayloadSize];
-   request.pack(0, NULL, reqdata, m_iPayloadSize);
    // ID = 0, connection request
    request.m_iID = 0;
+   char* reqdata = new char [m_iPayloadSize];
+   request.pack(0, NULL, reqdata, m_iPayloadSize);
 
    int hs_size = m_iPayloadSize;
    m_ConnReq.serialize(reqdata, hs_size);
@@ -981,13 +1038,14 @@ int CUDT::connect(const CPacket& response) throw ()
 
    if (m_bRendezvous && ((0 == response.getFlag()) || (1 == response.getType())) && (0 != m_ConnRes.m_iType))
    {
-      //a data packet or a keep-alive packet comes, which means the peer side is already connected
+      // a data packet or a keep-alive packet comes, which means the peer side is already connected
       // in this situation, the previously recorded response will be used
       goto POST_CONNECT;
    }
 
+   // continue on data packet arrived
    if ((1 != response.getFlag()) || (0 != response.getType()))
-      return -1;
+      return 1;
 
    m_ConnRes.deserialize(response.m_pcData, response.getLength());
 
@@ -1033,6 +1091,9 @@ POST_CONNECT:
    m_iRcvCurrSeqNo = m_ConnRes.m_iISN - 1;
    m_PeerID = m_ConnRes.m_iID;
    memcpy(m_piSelfIP, m_ConnRes.m_piPeerIP, 16);
+
+   // Record cookie
+   m_pCookie = m_ConnRes.m_iCookie;
 
    // Prepare all data structures
    try
@@ -1122,6 +1183,9 @@ void CUDT::connect(const sockaddr* peer, CHandShake* hs)
    m_PeerID = hs->m_iID;
    hs->m_iID = m_SocketID;
 
+   // Record cookie
+   m_pCookie = hs->m_iCookie;
+
    // use peer's ISN and send it back for security check
    m_iISN = hs->m_iISN;
 
@@ -1180,6 +1244,7 @@ void CUDT::connect(const sockaddr* peer, CHandShake* hs)
    m_ullInterval = (uint64_t)(m_pCC->m_dPktSndPeriod * m_ullCPUFrequency);
    m_dCongestionWindow = m_pCC->m_dCWndSize;
 
+   delete m_pPeerAddr;
    m_pPeerAddr = (AF_INET == m_iIPversion) ? (sockaddr*)new sockaddr_in : (sockaddr*)new sockaddr_in6;
    memcpy(m_pPeerAddr, peer, (AF_INET == m_iIPversion) ? sizeof(sockaddr_in) : sizeof(sockaddr_in6));
 
@@ -1191,12 +1256,12 @@ void CUDT::connect(const sockaddr* peer, CHandShake* hs)
    m_pRcvQueue->setNewEntry(this);
 
    //send the response to the peer, see listen() for more discussions about this
-   CPacket response;
    int size = CHandShake::m_iContentSize;
    char* buffer = new char[size];
    hs->serialize(buffer, size);
-   response.pack(0, NULL, buffer, size);
+   CPacket response;
    response.m_iID = m_PeerID;
+   response.pack(0, NULL, buffer, size);
    m_pSndQueue->sendto(peer, response);
    delete [] buffer;
 }
@@ -2141,8 +2206,12 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
       // to save time on buffer processing and bandwidth/AS measurement, a lite ACK only feeds back an ACK number
       if (4 == size)
       {
+    	 ctrlpkt.m_iID = m_PeerID;
          ctrlpkt.pack(pkttype, NULL, &ack, size);
-         ctrlpkt.m_iID = m_PeerID;
+         // Set MAC in secure mode
+         if (m_pSecMod) {
+        	 ctrlpkt.setMAC(&m_pSecKey[0], 16);
+         }
          m_pSndQueue->sendto(m_pPeerAddr, ctrlpkt);
 
          break;
@@ -2203,6 +2272,7 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
          if (data[3] < 2)
             data[3] = 2;
 
+         ctrlpkt.m_iID = m_PeerID;
          if (currtime - m_ullLastAckTime > m_ullSYNInt)
          {
             data[4] = m_pRcvTimeWindow->getPktRcvSpeed();
@@ -2215,8 +2285,10 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
          {
             ctrlpkt.pack(pkttype, &m_iAckSeqNo, data, 16);
          }
-
-         ctrlpkt.m_iID = m_PeerID;
+         // Set MAC in secure mode
+         if (m_pSecMod) {
+        	 ctrlpkt.setMAC(&m_pSecKey[0], 16);
+         }
          m_pSndQueue->sendto(m_pPeerAddr, ctrlpkt);
 
          m_pACKWindow->store(m_iAckSeqNo, m_iRcvLastAck);
@@ -2229,8 +2301,12 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
       }
 
    case 6: //110 - Acknowledgement of Acknowledgement
+	  ctrlpkt.m_iID = m_PeerID;
       ctrlpkt.pack(pkttype, lparam);
-      ctrlpkt.m_iID = m_PeerID;
+      // Set MAC in secure mode
+      if (m_pSecMod) {
+     	 ctrlpkt.setMAC(&m_pSecKey[0], 16);
+      }
       m_pSndQueue->sendto(m_pPeerAddr, ctrlpkt);
 
       break;
@@ -2239,6 +2315,7 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
       {
       if (NULL != rparam)
       {
+         ctrlpkt.m_iID = m_PeerID;
          if (1 == size)
          {
             // only 1 loss packet
@@ -2249,8 +2326,10 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
             // more than 1 loss packets
             ctrlpkt.pack(pkttype, NULL, rparam, 8);
          }
-
-         ctrlpkt.m_iID = m_PeerID;
+         // Set MAC in secure mode
+         if (m_pSecMod) {
+        	 ctrlpkt.setMAC(&m_pSecKey[0], 16);
+         }
          m_pSndQueue->sendto(m_pPeerAddr, ctrlpkt);
 
          ++ m_iSentNAK;
@@ -2267,8 +2346,12 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
 
          if (0 < losslen)
          {
+        	ctrlpkt.m_iID = m_PeerID;
             ctrlpkt.pack(pkttype, NULL, data, losslen * 4);
-            ctrlpkt.m_iID = m_PeerID;
+            // Set MAC in secure mode
+            if (m_pSecMod) {
+           	    ctrlpkt.setMAC(&m_pSecKey[0], 16);
+            }
             m_pSndQueue->sendto(m_pPeerAddr, ctrlpkt);
 
             ++ m_iSentNAK;
@@ -2290,8 +2373,12 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
       }
 
    case 4: //100 - Congestion Warning
+	  ctrlpkt.m_iID = m_PeerID;
       ctrlpkt.pack(pkttype);
-      ctrlpkt.m_iID = m_PeerID;
+      // Set MAC in secure mode
+      if (m_pSecMod) {
+     	 ctrlpkt.setMAC(&m_pSecKey[0], 16);
+      }
       m_pSndQueue->sendto(m_pPeerAddr, ctrlpkt);
 
       CTimer::rdtsc(m_ullLastWarningTime);
@@ -2299,41 +2386,62 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
       break;
 
    case 1: //001 - Keep-alive
-      ctrlpkt.pack(pkttype);
       ctrlpkt.m_iID = m_PeerID;
+      ctrlpkt.m_iMsgNo = m_pCookie ^ m_iISN;
+      ctrlpkt.pack(pkttype);
+      // Set MAC in secure mode
+      if (m_pSecMod) {
+     	 ctrlpkt.setMAC(&m_pSecKey[0], 16);
+      }
       m_pSndQueue->sendto(m_pPeerAddr, ctrlpkt);
  
       break;
 
    case 0: //000 - Handshake
-      ctrlpkt.pack(pkttype, NULL, rparam, sizeof(CHandShake));
       ctrlpkt.m_iID = m_PeerID;
+      ctrlpkt.pack(pkttype, NULL, rparam, sizeof(CHandShake));
+      // Set MAC in secure mode
+      if (m_pSecMod) {
+     	 ctrlpkt.setMAC(&m_pSecKey[0], 16);
+      }
       m_pSndQueue->sendto(m_pPeerAddr, ctrlpkt);
 
       break;
 
    case 5: //101 - Shutdown
-      ctrlpkt.pack(pkttype);
       ctrlpkt.m_iID = m_PeerID;
+      ctrlpkt.pack(pkttype);
+      // Set MAC in secure mode
+      if (m_pSecMod) {
+     	 ctrlpkt.setMAC(&m_pSecKey[0], 16);
+      }
       m_pSndQueue->sendto(m_pPeerAddr, ctrlpkt);
 
       break;
 
    case 7: //111 - Msg drop request
-      ctrlpkt.pack(pkttype, lparam, rparam, 8);
       ctrlpkt.m_iID = m_PeerID;
+      ctrlpkt.pack(pkttype, lparam, rparam, 8);
+      // Set MAC in secure mode
+      if (m_pSecMod) {
+     	 ctrlpkt.setMAC(&m_pSecKey[0], 16);
+      }
       m_pSndQueue->sendto(m_pPeerAddr, ctrlpkt);
 
       break;
 
    case 8: //1000 - acknowledge the peer side a special error
-      ctrlpkt.pack(pkttype, lparam);
       ctrlpkt.m_iID = m_PeerID;
+      ctrlpkt.pack(pkttype, lparam);
+      // Set MAC in secure mode
+      if (m_pSecMod) {
+     	 ctrlpkt.setMAC(&m_pSecKey[0], 16);
+      }
       m_pSndQueue->sendto(m_pPeerAddr, ctrlpkt);
 
       break;
 
-   case 32767: //0x7FFF - Resevered for future use
+   case 16383: //0x3FFF - Resevered for future use
       break;
 
    default:
@@ -2341,8 +2449,45 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
    }
 }
 
+#include <time.h>
+
 void CUDT::processCtrl(CPacket& ctrlpkt)
 {
+    // Check MAC in secure mode
+	if (m_pSecMod) {
+		if (!ctrlpkt.chkMAC(&m_pSecKey[0], 16)) {
+			time_t rawtime;
+			time(&rawtime);
+
+			///printf("%s DDOS attack, ctrlpkt MAC check failed.pkt.type:%d ", ctime(&rawtime), ctrlpkt.getType());
+
+			// log attack
+			if (m_iIPversion == AF_INET) {
+				// IPv4
+				int ip = ntohl(((sockaddr_in *)m_pPeerAddr)->sin_addr.s_addr);
+				/*printf(" from ipv4: "
+						"%d.%d.%d.%d\n",
+						(ip>>24)&0xff, (ip>>16)&0xff, (ip>>8)&0xff, (ip>>0)&0xff);
+                                */
+			} else {
+				// IPv6
+				sockaddr_in6* a = (sockaddr_in6 *)m_pPeerAddr;
+				/*printf(" from ipv6: "
+						"%d.%d.%d.%d."
+						"%d.%d.%d.%d."
+						"%d.%d.%d.%d."
+						"%d.%d.%d.%d\n",
+						a->sin6_addr.s6_addr[15], a->sin6_addr.s6_addr[14], a->sin6_addr.s6_addr[13],a->sin6_addr.s6_addr[12],
+						a->sin6_addr.s6_addr[11], a->sin6_addr.s6_addr[10], a->sin6_addr.s6_addr[9],a->sin6_addr.s6_addr[8],
+						a->sin6_addr.s6_addr[7], a->sin6_addr.s6_addr[6], a->sin6_addr.s6_addr[5],a->sin6_addr.s6_addr[4],
+						a->sin6_addr.s6_addr[3], a->sin6_addr.s6_addr[2], a->sin6_addr.s6_addr[1],a->sin6_addr.s6_addr[0]);
+                                */
+			}
+
+			return;
+		}
+	}
+
    // Just heard from the peer, reset the expiration count.
    m_iEXPCount = 1;
    uint64_t currtime;
@@ -3084,7 +3229,9 @@ void CUDT::checkTimers()
             ///printf("%s.%s.%d, trigger recv/listen ...", __FILE__, __FUNCTION__, __LINE__);
             feedOsfd();
             ///printf("done\n");
-	} else if (m_bConnected && (m_iSndBufSize > m_pSndBuffer->getCurrBufSize()))
+	} 
+
+        if (m_bConnected && (m_iSndBufSize > m_pSndBuffer->getCurrBufSize()))
 	{
             ///printf("%s.%s.%d, trigger send ...", __FILE__, __FUNCTION__, __LINE__);
             ///feedOsfd();

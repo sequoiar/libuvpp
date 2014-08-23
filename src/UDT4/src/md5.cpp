@@ -53,6 +53,7 @@
 
 #include "md5.h"
 #include <string.h>
+#include <assert.h>
 
 #undef BYTE_ORDER	/* 1 = big-endian, -1 = little-endian, 0 = unknown */
 #ifdef ARCH_IS_BIG_ENDIAN
@@ -317,6 +318,17 @@ md5_init(md5_state_t *pms)
     pms->abcd[1] = /*0xefcdab89*/ T_MASK ^ 0x10325476;
     pms->abcd[2] = /*0x98badcfe*/ T_MASK ^ 0x67452301;
     pms->abcd[3] = 0x10325476;
+}
+
+void
+md5_init_key(md5_state_t *pms, const unsigned char *key, const int len)
+{
+    assert(len >= 16);
+    pms->count[0] = pms->count[1] = 0;
+    pms->abcd[0] = (key[0]  | (key[1] << 8)  | (key[2] << 16)  | (key[3] << 24));
+    pms->abcd[1] = (key[7]  | (key[6] << 8)  | (key[5] << 16)  | (key[4] << 24));
+    pms->abcd[2] = (key[8]  | (key[9] << 8)  | (key[10] << 16) | (key[11] << 24));
+    pms->abcd[3] = (key[15] | (key[14] << 8) | (key[13] << 16) | (key[12] << 24));
 }
 
 void

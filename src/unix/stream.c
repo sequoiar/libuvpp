@@ -223,7 +223,7 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, int events) {
 				  errno = ECONNABORTED;
 				  continue;
 			  } else {
-				  uv__set_sys_error(stream->loop, errno);
+				  uv__set_sys_error(stream->loop, uv_translate_udt_error());
 				  stream->connection_cb((uv_stream_t*)stream, -1);
 			  }
 		  } else {
@@ -523,9 +523,9 @@ start:
     while (n == -1 && errno == EINTR);
   } else {
 	  if (stream->type == UV_UDT) {
-		  int next = 1;
+		  int next = 1, it = 0;
 		  n = -1;
-		  for (int it = 0; it < iovcnt; it ++) {
+		  for (it = 0; it < iovcnt; it ++) {
 			  size_t ilen = 0;
 			  while (ilen < iov[it].iov_len) {
 				  int rc = udt_send(((uv_udt_t *)stream)->udtfd, ((char *)iov[it].iov_base)+ilen, iov[it].iov_len-ilen, 0);

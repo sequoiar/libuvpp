@@ -811,7 +811,7 @@ UDTSOCKET CUDTUnited::accept(const UDTSOCKET listen, sockaddr* addr, int* addrle
    return u;
 }
 
-int CUDTUnited::punchhole(const UDTSOCKET u, const sockaddr* name, int namelen)
+int CUDTUnited::punchhole(const UDTSOCKET u, const sockaddr* name, int namelen, int from, int to)
 {
    CUDTSocket* s = locate(u);
    if (NULL == s) {
@@ -855,7 +855,7 @@ int CUDTUnited::punchhole(const UDTSOCKET u, const sockaddr* name, int namelen)
    ///s->m_Status = CONNECTING;
    try
    {
-      s->m_pUDT->punchhole(name);
+      s->m_pUDT->punchhole(name, from, to);
    }
    catch (CUDTException e)
    {
@@ -1887,11 +1887,11 @@ UDTSOCKET CUDT::accept(UDTSOCKET u, sockaddr* addr, int* addrlen)
    }
 }
 
-int CUDT::punchhole(UDTSOCKET u, const sockaddr* name, int namelen)
+int CUDT::punchhole(UDTSOCKET u, const sockaddr* name, int namelen, int from, int to)
 {
    try
    {
-      return s_UDTUnited.punchhole(u, name, namelen);
+      return s_UDTUnited.punchhole(u, name, namelen, from,  to);
    }
    catch (CUDTException e)
    {
@@ -2466,9 +2466,9 @@ int connect(UDTSOCKET u, const struct sockaddr* name, int namelen)
    return CUDT::connect(u, name, namelen);
 }
 
-int punchhole(UDTSOCKET u, const struct sockaddr* name, int namelen)
+int punchhole(UDTSOCKET u, const struct sockaddr* name, int namelen, int from, int to)
 {
-   return CUDT::punchhole(u, name, namelen);
+   return CUDT::punchhole(u, name, namelen, from, to);
 }
 
 int close(UDTSOCKET u)

@@ -167,18 +167,29 @@ uint64_t CTimer::readCPUFrequency()
     	  perror("fopen /proc/cpuinfo");
       } else {
           while (fgets(str, 256, fd)) {
-              if (strncmp("cpu MHz", str, sizeof("cpu MHz")-1) == 0) {
+              if (strncasecmp("cpu MHz", str, sizeof("cpu MHz")-1) == 0) {
                   find = 1;
                   old = 0;
                   break;
               }
               // old style cpuinfo
-              if (strncmp("clock", str, sizeof("clock")-1) == 0) {
+              if (strncasecmp("clock", str, sizeof("clock")-1) == 0) {
                   find = 1;
                   old = 1;
                   break;
               }
-          }          
+          }   
+          // try read BogoMIPS
+          if (!find) {
+              rewind(fd);
+              while (fgets(str, 256, fd)) {
+                  if (strncasecmp("bogomips", str, sizeof("bogomips")-1) == 0) {
+                      find = 1;
+                      old = 0;
+                      break;
+                  }
+              }
+          }       
           fclose(fd);
 
           if (find) {

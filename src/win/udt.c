@@ -316,21 +316,22 @@ static int uv__bind(uv_udt_t* handle,
 
     /* Set UDT buffer size */
     // optimization for node.js
-    // - set maxWindowSize from 25600 to 1280, UDT/UDP buffer from 10M/1M to 512K/256K
-    optval = 1280;
+    // - set maxWindowSize from 25600 to 2560, UDT/UDP buffer from 10M/1M to 1M/100K
+    // - ??? or            from 25600 to 5120, UDT/UDP buffer from 10M/1M to 2M/200K
+    optval = 5120;
     if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_FC, (void *)&optval, sizeof(optval))) {
        closesocket(sock);
        udt_close(handle->udtfd);
        return -1;
     }
-    optval = 256000;
+    optval = 204800;
     if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDP_SNDBUF, (void *)&optval, sizeof(optval)) |
     	udt_setsockopt(handle->udtfd, 0, (int)UDT_UDP_RCVBUF, (void *)&optval, sizeof(optval))) {
        closesocket(sock);
        udt_close(handle->udtfd);
        return -1;
     }
-    optval = 512000;
+    optval = 2048000;
     if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_SNDBUF, (void *)&optval, sizeof(optval)) |
     	udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_RCVBUF, (void *)&optval, sizeof(optval))) {
        closesocket(sock);
@@ -421,21 +422,22 @@ static int uv__bindfd(
 
     /* Set UDT buffer size */
     // optimization for node.js
-    // - set maxWindowSize from 25600 to 1280, UDT/UDP buffer from 10M/1M to 512K/256K
-    optval = 1280;
+    // - set maxWindowSize from 25600 to 2560, UDT/UDP buffer from 10M/1M to 1M/100K
+    // - ??? or            from 25600 to 5120, UDT/UDP buffer from 10M/1M to 2M/200K
+    optval = 5120;
     if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_FC, (void *)&optval, sizeof(optval))) {
        closesocket(sock);
        udt_close(handle->udtfd);
        return -1;
     }
-    optval = 256000;
+    optval = 204800;
     if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDP_SNDBUF, (void *)&optval, sizeof(optval)) |
     	udt_setsockopt(handle->udtfd, 0, (int)UDT_UDP_RCVBUF, (void *)&optval, sizeof(optval))) {
        closesocket(sock);
        udt_close(handle->udtfd);
        return -1;
     }
-    optval = 512000;
+    optval = 2048000;
     if (udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_SNDBUF, (void *)&optval, sizeof(optval)) |
     	udt_setsockopt(handle->udtfd, 0, (int)UDT_UDT_RCVBUF, (void *)&optval, sizeof(optval))) {
        closesocket(sock);
@@ -1378,7 +1380,7 @@ INLINE static void udt_process_reqs_udtread(uv_loop_t* loop, uv_udt_t* handle) {
 							/* Read buffer was completely empty, report a 0-byte read. */
 							uv__set_sys_error(loop, WSAEWOULDBLOCK);
 							handle->read_cb((uv_stream_t*)handle, bytes, buf);
-						} else if (err == ERROR_BROKEN_PIPE) {
+						} else if (err == ERROR_BROKEN_PIPE || err == WSAENOTSOCK) {
 							/* Connection closed or socket broken as EOF*/
 							if (handle->flags & UV_HANDLE_READING) {
 								handle->flags &= ~UV_HANDLE_READING;
@@ -1947,17 +1949,26 @@ int uv_udt_setmbs(uv_udt_t* handle, int32_t mfc, int32_t mudt, int32_t mudp) {
 	return 0;
 }
 
-int uv_udt_punchhole(uv_udt_t* handle, struct sockaddr_in address) {
+int uv_udt_setsec(uv_udt_t* handle, int32_t mode, unsigned char key_buf[], int32_t key_len) {
+    if (handle->socket != INVALID_SOCKET &&
+        (udt_setsockopt(handle->udtfd, 0, UDT_UDT_SECKEY, key_buf, (32 < key_len) ? 32 : key_len)) ||
+         udt_setsockopt(handle->udtfd, 0, UDT_UDT_SECMOD, &mode, sizeof(mode)))
+	    return -1;
+
+	return 0;
+}
+
+int uv_udt_punchhole(uv_udt_t* handle, struct sockaddr_in address, int32_t from, int32_t to) {
 	if (handle->socket != INVALID_SOCKET &&
-        udt_punchhole(handle->udtfd, &address, sizeof(address)))
+        udt_punchhole(handle->udtfd, &address, sizeof(address), from, to))
 		return -1;
 
 	return 0;
 }
 
-int uv_udt_punchhole6(uv_udt_t* handle, struct sockaddr_in6 address) {
+int uv_udt_punchhole6(uv_udt_t* handle, struct sockaddr_in6 address, int32_t from, int32_t to) {
 	if (handle->socket != INVALID_SOCKET &&
-        udt_punchhole(handle->udtfd, &address, sizeof(address)))
+        udt_punchhole(handle->udtfd, &address, sizeof(address), from,  to))
 		return -1;
 
 	return 0;

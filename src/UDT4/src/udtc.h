@@ -196,7 +196,9 @@ enum UDT_UDTOpt {
 	UDT_UDT_SNDDATA,         // size of data in the sending buffer
 	UDT_UDT_RCVDATA,         // size of data available for recv
 	UDT_UDT_OSFD,            // OS fd associated with the UDT socket, read only.
-    UDT_UDT_QOS              // UDT socket Qos/priority
+    UDT_UDT_QOS,             // UDT socket Qos/priority
+    UDT_UDT_SECMOD,          // socket security mode: 0 - no secure, 1 - authentication control packet, 2 - authentication both control and data packet
+    UDT_UDT_SECKEY           // symmetric key
 };
 
 // UDT CCC option
@@ -301,7 +303,7 @@ UDT_API extern int udt_bind(UDTSOCKET u, const struct sockaddr* name, int namele
 UDT_API extern int udt_bind2(UDTSOCKET u, UDPSOCKET udpsock);
 UDT_API extern int udt_listen(UDTSOCKET u, int backlog);
 UDT_API extern UDTSOCKET udt_accept(UDTSOCKET u, struct sockaddr* addr, int* addrlen);
-UDT_API extern int udt_punchhole(UDTSOCKET u, const struct sockaddr* name, int namelen);
+UDT_API extern int udt_punchhole(UDTSOCKET u, const struct sockaddr* name, int namelen, int from, int to);
 UDT_API extern int udt_connect(UDTSOCKET u, const struct sockaddr* name, int namelen);
 UDT_API extern int udt_close(UDTSOCKET u);
 UDT_API extern int udt_getpeername(UDTSOCKET u, struct sockaddr* name, int* namelen);

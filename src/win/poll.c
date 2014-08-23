@@ -188,7 +188,7 @@ static void uv__fast_poll_process_poll_req(uv_loop_t* loop, uv_poll_t* handle,
       /* Stop polling. */
       handle->events = 0;
       if (uv__is_active(handle))
-          uv__handle_stop(handle);
+        uv__handle_stop(handle);
     }
 
     if (events != 0) {

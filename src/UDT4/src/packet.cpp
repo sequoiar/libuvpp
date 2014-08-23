@@ -36,6 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*****************************************************************************
 written by
    Yunhong Gu, last updated 02/12/2011
+   Tom Zhou, 01/11/2013, support secure flag for authentication
 *****************************************************************************/
 
 
@@ -53,7 +54,7 @@ written by
 //    0                   1                   2                   3
 //    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//   |0|                        Sequence Number                      |
+//   |0|s|                      Sequence Number                      |
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 //   |ff |o|                     Message Number                      |
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -61,10 +62,15 @@ written by
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 //   |                     Destination Socket ID                     |
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//   |                   Message Authentication Code                 |
+//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 //
 //   bit 0:
 //      0: Data Packet
 //      1: Control Packet
+//   bit s: TBD...
+//      0: Not Secure Packet
+//      1: Secure Packet
 //   bit ff:
 //      11: solo message packet
 //      10: first packet of a message
@@ -76,7 +82,7 @@ written by
 //    0                   1                   2                   3
 //    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//   |1|            Type             |             Reserved          |
+//   |1|s|          Type             |             Reserved          |
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 //   |                       Additional Info                         |
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -84,7 +90,12 @@ written by
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 //   |                     Destination Socket ID                     |
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//   |                   Message Authentication Code                 |
+//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 //
+//   bit s: TBD...
+//      0: Not Secure Packet
+//      1: Secure Packet
 //   bit 1-15:
 //      0: Protocol Connection Handshake
 //              Add. Info:    Undefined
@@ -144,10 +155,11 @@ written by
 
 
 #include <cstring>
+#include "md5.h"
 #include "packet.h"
 
 
-const int CPacket::m_iPktHdrSize = 16;
+const int CPacket::m_iPktHdrSize = 20; // 128-bit standard header + 32-bit MAC
 const int CHandShake::m_iContentSize = 48;
 
 
@@ -157,10 +169,11 @@ m_iSeqNo((int32_t&)(m_nHeader[0])),
 m_iMsgNo((int32_t&)(m_nHeader[1])),
 m_iTimeStamp((int32_t&)(m_nHeader[2])),
 m_iID((int32_t&)(m_nHeader[3])),
+m_iMAC((int32_t&)(m_nHeader[4])),
 m_pcData((char*&)(m_PacketVector[1].iov_base)),
-__pad()
+__pad(0)
 {
-   for (int i = 0; i < 4; ++ i)
+   for (int i = 0; i < 5; ++ i)
       m_nHeader[i] = 0;
    m_PacketVector[0].iov_base = (char *)m_nHeader;
    m_PacketVector[0].iov_len = CPacket::m_iPktHdrSize;
@@ -184,7 +197,8 @@ void CPacket::setLength(int len)
 
 void CPacket::pack(int pkttype, void* lparam, void* rparam, int size)
 {
-   // Set (bit-0 = 1) and (bit-1~15 = type)
+   pkttype &= 0x3FFF;
+   // Set (bit-0 = 1), (bit-1 = secure flag reserved) and (bit-2~15 = type)
    m_nHeader[0] = 0x80000000 | (pkttype << 16);
 
    // Set additional information and control information field
@@ -272,7 +286,7 @@ void CPacket::pack(int pkttype, void* lparam, void* rparam, int size)
 
       break;
 
-   case 32767: //0x7FFF - Reserved for user defined control packets
+   case 16383: //0x3FFF - Reserved for user defined control packets
       // for extended control packet
       // "lparam" contains the extended type information for bit 16 - 31
       // "rparam" is the control information
@@ -309,8 +323,101 @@ int CPacket::getFlag() const
 
 int CPacket::getType() const
 {
-   // read bit 1~15
-   return (m_nHeader[0] >> 16) & 0x00007FFF;
+   // read bit 2~15
+   return (m_nHeader[0] >> 16) & 0x00003FFF;
+}
+
+uint32_t CPacket::getMAC() const
+{
+	if (m_nHeader[0] & 0x40000000) {
+		// read bit 128-159
+		return m_nHeader[4];
+	} else {
+		// invalid MAC
+		return 0;
+	}
+}
+
+// calculating MAC using MD5
+int CPacket::setMAC(const unsigned char* key, const int len)
+{
+	md5_state_t state;
+	uint32_t digest[4];
+
+
+	/*printf("pkt.type %d,setMAC:", getType());
+	for (int i=0; i<len; i++) {
+		printf("%02x ", key[i]);
+	}
+	printf("\n");
+*/
+	// nothing to do again
+	if (m_nHeader[0] & 0x40000000) {
+        return m_nHeader[4];
+	}
+	// set security flag
+	m_nHeader[0] |= 0x40000000;
+	m_nHeader[4]  = 0x0;
+
+	// round 1
+	md5_init_key(&state, key, len);
+	md5_append(&state, (const md5_byte_t *)m_PacketVector[0].iov_base, m_PacketVector[0].iov_len);
+	if (m_PacketVector[1].iov_base && m_PacketVector[1].iov_len) {
+		md5_append(&state, (const md5_byte_t *)m_PacketVector[1].iov_base, m_PacketVector[1].iov_len);
+	}
+	md5_finish(&state, (md5_byte_t *)digest);
+
+	// round 2
+	md5_init_key(&state, key, len);
+	md5_append(&state, (const md5_byte_t *)digest, sizeof(digest));
+	md5_finish(&state, (md5_byte_t *)digest);
+	m_nHeader[4] = digest[0] ^ digest[1] ^ digest[2] ^ digest[3];
+
+	return m_nHeader[4];
+}
+
+// 1: pass, 0: fail, -1: bypass
+int CPacket::chkMAC(const unsigned char* key, const int len)
+{
+	md5_state_t state;
+	uint32_t digest[4];
+	uint32_t expect;
+
+
+	/*printf("pkt.type %d,chkMAC [0]-0x%x [4]-0x%x:",
+	         getType(), m_nHeader[0], m_nHeader[4]);
+	for (int i=0; i<len; i++) {
+		printf("%02x ", key[i]);
+	}
+	printf("\n");
+	 */
+	// check security flag
+	if (!(m_nHeader[0] & 0x40000000)) {
+		// bypass ACK,ACK-2 packet check for connection in early setup stage
+		if (getType() != 2 && getType() != 6)
+			return 0;  // fail
+		else
+			return -1; // pass
+	}
+
+	// save then clear MAC
+	expect = m_nHeader[4];
+	m_nHeader[4] = 0x0;
+
+	// round 1
+	md5_init_key(&state, key, len);
+	md5_append(&state, (const md5_byte_t *)m_PacketVector[0].iov_base, m_PacketVector[0].iov_len);
+	if (m_PacketVector[1].iov_base && m_PacketVector[1].iov_len) {
+		md5_append(&state, (const md5_byte_t *)m_PacketVector[1].iov_base, m_PacketVector[1].iov_len);
+	}
+	md5_finish(&state, (md5_byte_t *)digest);
+
+	// round 2
+	md5_init_key(&state, key, len);
+	md5_append(&state, (const md5_byte_t *)digest, sizeof(digest));
+	md5_finish(&state, (md5_byte_t *)digest);
+
+	return (expect == (digest[0] ^ digest[1] ^ digest[2] ^ digest[3])) ? 1 : 0;
 }
 
 int CPacket::getExtendedType() const
