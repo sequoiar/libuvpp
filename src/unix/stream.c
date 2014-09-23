@@ -853,7 +853,7 @@ static void uv__read(uv_stream_t* stream) {
     				stream->read2_cb((uv_pipe_t*)stream, -1, buf, UV_UNKNOWN_HANDLE);
     			}
 
-    			assert(!uv__io_active(&stream->read_watcher));
+    			///assert(!uv__io_active(&stream->read_watcher));
     			return;
     		}
 
