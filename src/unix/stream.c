@@ -847,13 +847,17 @@ static void uv__read(uv_stream_t* stream) {
     			/* Error. User should call uv_close(). */
     			uv__set_sys_error(stream->loop, errno);
 
+    			uv__io_stop(stream->loop, &stream->read_watcher);
+    			if (!uv__io_active(&stream->write_watcher))
+    				uv__handle_stop(stream);
+
     			if (stream->read_cb) {
     				stream->read_cb(stream, -1, buf);
     			} else {
     				stream->read2_cb((uv_pipe_t*)stream, -1, buf, UV_UNKNOWN_HANDLE);
     			}
 
-    			///assert(!uv__io_active(&stream->read_watcher));
+    			assert(!uv__io_active(&stream->read_watcher));
     			return;
     		}
 
