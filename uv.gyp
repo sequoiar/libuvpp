@@ -30,6 +30,7 @@
         'include/uv-private',
         'src/',
         'src/UDT4/src/',
+        'src/nacl/',
       ],
       'direct_dependent_settings': {
         'include_dirs': [ 'include' ],
@@ -45,6 +46,7 @@
         'include/uv-private/ngx-queue.h',
         'include/uv-private/tree.h',
         'src/UDT4/src/udtc.h',
+        'src/nacl/tweetnacl.h',
         'src/cares.c',
         'src/fs-poll.c',
         'src/uv-common.c',
@@ -127,6 +129,7 @@
         'src/UDT4/src/queue.cpp',
         'src/UDT4/src/udtc.cpp',
         'src/UDT4/src/window.cpp',
+        'src/nacl/tweetnacl.c',
       ],
       'conditions': [
         [ 'OS=="win"', {

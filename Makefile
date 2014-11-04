@@ -24,7 +24,7 @@ ifdef MSVC
 uname_S := MINGW
 endif
 
-CPPFLAGS += -Iinclude -Iinclude/uv-private -Isrc/UDT4/src -DEVPIPE_OSFD
+CPPFLAGS += -Iinclude -Iinclude/uv-private -Isrc/UDT4/src -Isrc/nacl -DEVPIPE_OSFD
 
 CARES_OBJS =
 CARES_OBJS += src/ares/ares__close_sockets.o
@@ -87,6 +87,8 @@ UDT_OBJS += src/UDT4/src/queue.o
 UDT_OBJS += src/UDT4/src/udtc.o
 UDT_OBJS += src/UDT4/src/window.o
 
+NACL_OBJS = src/nacl/tweetnacl.o
+
 ifneq (,$(findstring MINGW,$(uname_S)))
 include config-mingw.mk
 else
@@ -102,6 +104,9 @@ $(CARES_OBJS): %.o: %.c
 	$(CC) -o $*.o -c $(CFLAGS) $(CPPFLAGS) $< -DHAVE_CONFIG_H
 
 $(UDT_OBJS): %.o: %.cpp
+	$(CC) -o $*.o -c $(CFLAGS) $(CPPFLAGS) $< -DHAVE_CONFIG_H
+	
+$(NACL_OBJS): %.o: %.c
 	$(CC) -o $*.o -c $(CFLAGS) $(CPPFLAGS) $< -DHAVE_CONFIG_H
 
 test/echo-server-udt: test/echo-server-udt.c uv.a

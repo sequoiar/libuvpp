@@ -145,7 +145,7 @@ endif
 RUNNER_LIBS=
 RUNNER_SRC=test/runner-unix.c
 
-uv.a: $(OBJS) src/cares.o src/fs-poll.o src/uv-common.o src/unix/ev/ev.o src/unix/uv-eio.o src/unix/eio/eio.o $(CARES_OBJS) $(UDT_OBJS) 
+uv.a: $(OBJS) src/cares.o src/fs-poll.o src/uv-common.o src/unix/ev/ev.o src/unix/uv-eio.o src/unix/eio/eio.o $(CARES_OBJS) $(UDT_OBJS) $(NACL_OBJS)  
 	$(AR) rcs uv.a $^
 
 src/%.o: src/%.c include/uv.h include/uv-private/uv-unix.h
@@ -173,6 +173,7 @@ src/unix/uv-eio.o: src/unix/uv-eio.c
 clean-platform:
 	-rm -f src/ares/*.o
 	-rm -f src/UDT4/src/*.o
+	-rm -f src/nacl/*.o
 	-rm -f src/unix/*.o
 	-rm -f src/unix/ev/*.o
 	-rm -f src/unix/eio/*.o
@@ -183,6 +184,7 @@ clean-platform:
 distclean-platform:
 	-rm -f src/ares/*.o
 	-rm -f src/UDT4/src/*.o
+	-rm -f src/nacl/*.o
 	-rm -f src/unix/*.o
 	-rm -f src/unix/ev/*.o
 	-rm -f src/unix/eio/*.o
