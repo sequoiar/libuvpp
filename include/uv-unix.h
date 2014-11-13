@@ -283,6 +283,8 @@ typedef struct {
 
 #define UV_TCP_PRIVATE_FIELDS /* empty */
 
+#define UV_DEVICE_PRIVATE_FIELDS /* empty */
+
 #define UV_UDP_PRIVATE_FIELDS                                                 \
   uv_alloc_cb alloc_cb;                                                       \
   uv_udp_recv_cb recv_cb;                                                     \

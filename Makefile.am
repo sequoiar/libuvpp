@@ -70,6 +70,7 @@ libuv_la_SOURCES += src/win/async.c \
                     src/win/thread.c \
                     src/win/timer.c \
                     src/win/tty.c \
+                    src/win/device.c \
                     src/win/udp.c \
                     src/win/util.c \
                     src/win/winapi.c \
@@ -102,6 +103,7 @@ libuv_la_SOURCES += src/unix/async.c \
                    src/unix/thread.c \
                    src/unix/timer.c \
                    src/unix/tty.c \
+                   src/unix/device.c \
                    src/unix/udp.c
 
 endif  # WINNT

@@ -453,6 +453,10 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
   LPFN_WSARECV func_wsarecv;                                                  \
   LPFN_WSARECVFROM func_wsarecvfrom;
 
+#define UV_DEVICE_PRIVATE_FIELDS                                              \
+  HANDLE handle;                                                              \
+  uv_buf_t buf;
+
 #define uv_pipe_server_fields                                                 \
   int pending_instances;                                                      \
   uv_pipe_accept_t* accept_reqs;                                              \
@@ -478,6 +482,18 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
     struct { uv_pipe_server_fields };                                         \
     struct { uv_pipe_connection_fields };                                     \
   };
+
+/* should change to *nux style */
+typedef struct uv_ioargs_s {
+  _In_opt_     LPVOID lpInBuffer;
+  _In_         DWORD nInBufferSize;
+  _Out_opt_    LPVOID lpOutBuffer;
+  _In_         DWORD nOutBufferSize;
+  _Out_opt_    DWORD lpBytesReturned;
+  /*
+  _Inout_opt_  LPOVERLAPPED lpOverlapped;
+  */
+} uv_ioargs_t; 
 
 /* TODO: put the parser states in an union - TTY handles are always */
 /* half-duplex so read-state can safely overlap write-state. */

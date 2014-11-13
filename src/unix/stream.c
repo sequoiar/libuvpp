@@ -1186,7 +1186,8 @@ static void uv__stream_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
 
   assert(stream->type == UV_TCP ||
          stream->type == UV_NAMED_PIPE ||
-         stream->type == UV_TTY);
+         stream->type == UV_TTY || 
+         stream->type == UV_DEVICE);
   assert(!(stream->flags & UV_CLOSING));
 
   if (stream->connect_req) {
@@ -1296,7 +1297,8 @@ int uv_write2(uv_write_t* req,
   assert(nbufs > 0);
   assert((stream->type == UV_TCP ||
           stream->type == UV_NAMED_PIPE ||
-          stream->type == UV_TTY) &&
+          stream->type == UV_TTY || 
+          stream->type == UV_DEVICE) &&
          "uv_write (unix) does not yet support other types of streams");
 
   if (uv__stream_fd(stream) < 0)
@@ -1442,7 +1444,7 @@ int uv_read_start(uv_stream_t* stream,
                   uv_alloc_cb alloc_cb,
                   uv_read_cb read_cb) {
   assert(stream->type == UV_TCP || stream->type == UV_NAMED_PIPE ||
-      stream->type == UV_TTY);
+      stream->type == UV_TTY || stream->type == UV_DEVICE);
 
   if (stream->flags & UV_CLOSING)
     return -EINVAL;
@@ -1509,6 +1511,7 @@ int uv___stream_fd(const uv_stream_t* handle) {
 
   assert(handle->type == UV_TCP ||
          handle->type == UV_TTY ||
+		 handle->type == UV_DEVICE ||
          handle->type == UV_NAMED_PIPE);
 
   s = handle->select;
