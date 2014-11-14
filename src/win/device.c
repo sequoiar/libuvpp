@@ -94,9 +94,6 @@ int uv_device_ioctl(uv_device_t* device, int cmd, void* arg) {
 }
 
 void uv_device_endgame(uv_loop_t* loop, uv_device_t* handle) {
-  int err;
-  unsigned int i;
-
   if (handle->buf.base) {
     free(handle->buf.base);
   }
@@ -106,8 +103,6 @@ void uv_device_endgame(uv_loop_t* loop, uv_device_t* handle) {
 static void uv_device_queue_read(uv_loop_t* loop, uv_device_t* handle) {
   uv_read_t* req;
   BOOL r;
-  uv_buf_t buf;
-  DWORD bytes, flags;
   DWORD err;
 
   assert(handle->flags & UV_HANDLE_READING);
@@ -117,17 +112,13 @@ static void uv_device_queue_read(uv_loop_t* loop, uv_device_t* handle) {
   req = &handle->read_req;
   memset(&req->overlapped, 0, sizeof(req->overlapped));
 
-  flags = 0;
-  bytes = 0;
-
   r = ReadFile(handle->handle,
     handle->buf.base,
     handle->buf.len,
-    &bytes,
+    NULL,
     &req->overlapped);
   if(r==TRUE) {
     handle->flags |= UV_HANDLE_READ_PENDING;
-    req->overlapped.InternalHigh = bytes;
     handle->reqs_pending++;
     uv_insert_pending_req(loop, (uv_req_t*)req);
   }else {
@@ -177,9 +168,7 @@ int uv_device_write(uv_loop_t* loop,
                  unsigned int nbufs,
                  uv_write_cb cb) {
   int result;
-  DWORD bytes;
   DWORD err = 0;
-  int i;
   
   if (nbufs != 1 && (nbufs != 0 || !handle)) {
     return ERROR_NOT_SUPPORTED;
@@ -200,7 +189,7 @@ int uv_device_write(uv_loop_t* loop,
   result = WriteFile(handle->handle,
     bufs[0].base,
     bufs[0].len,
-    &bytes,
+    NULL,
     &req->overlapped);
 
   if (result) {
@@ -227,9 +216,8 @@ int uv_device_write(uv_loop_t* loop,
 
 void uv_process_device_read_req(uv_loop_t* loop, uv_device_t* handle,
     uv_req_t* req) {
-  DWORD bytes, flags, err;
+  DWORD err;
   uv_buf_t buf;
-  BOOL result;
 
   assert(handle->type == UV_DEVICE);
 
