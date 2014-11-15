@@ -1511,7 +1511,7 @@ int uv___stream_fd(const uv_stream_t* handle) {
 
   assert(handle->type == UV_TCP ||
          handle->type == UV_TTY ||
-	 handle->type == UV_DEVICE ||
+         handle->type == UV_DEVICE ||
          handle->type == UV_NAMED_PIPE);
 
   s = handle->select;
