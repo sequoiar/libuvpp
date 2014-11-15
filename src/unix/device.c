@@ -26,13 +26,20 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 
-int uv_device_open(uv_loop_t* loop, uv_device_t* device, const char*path, int flags) {
-  int fd;
+int uv_device_init(uv_loop_t* loop, uv_device_t* handle) {
+  memset(handle, 0, sizeof(uv_device_t));
+  uv__stream_init(loop, (uv_stream_t*) handle, UV_DEVICE);
+
+  return 0;
+};
+
+int uv_device_open(uv_loop_t* loop, 
+    uv_device_t* device, const char*path, int flags) {
+  int fd, err;
   int stream_flags;
   if( (fd = open(path, flags)) < 0 ) {
-    return fd;
+    return -errno;
   } 
-  uv__stream_init(loop, (uv_stream_t*)device, UV_DEVICE);
 
   stream_flags = 0;
   if ( flags & O_RDONLY ) 
@@ -42,7 +49,12 @@ int uv_device_open(uv_loop_t* loop, uv_device_t* device, const char*path, int fl
   if ( flags & O_RDWR )
     stream_flags |= UV_STREAM_READABLE | UV_STREAM_WRITABLE;
 
-  uv__nonblock(fd, 1);
+  err = uv__nonblock(fd, 1);
+  if (err) {
+    close(fd);
+    return err;
+  }
+
   return uv__stream_open((uv_stream_t*)device, fd, stream_flags);
 }
 

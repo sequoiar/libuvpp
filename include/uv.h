@@ -626,6 +626,7 @@ struct uv_device_s {
   UV_DEVICE_PRIVATE_FIELDS
 };
 
+UV_EXTERN int uv_device_init(uv_loop_t* loop, uv_device_t* device);
 UV_EXTERN int uv_device_open(uv_loop_t* handle, uv_device_t* device, const char*path, int flags);
 UV_EXTERN int uv_device_ioctl(uv_device_t* device, int cmd, void* arg);
 
