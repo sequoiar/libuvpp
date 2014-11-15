@@ -126,6 +126,7 @@
             'src/win/stream-inl.h',
             'src/win/tcp.c',
             'src/win/tty.c',
+            'src/win/device.c',
             'src/win/timer.c',
             'src/win/udp.c',
             'src/win/util.c',
@@ -179,6 +180,7 @@
             'src/unix/thread.c',
             'src/unix/timer.c',
             'src/unix/tty.c',
+            'src/unix/device.c',
             'src/unix/udp.c',
           ],
           'link_settings': {
@@ -419,6 +421,7 @@
         'test/test-timer-from-check.c',
         'test/test-timer.c',
         'test/test-tty.c',
+        'test/test-device-tun-echo.c',
         'test/test-udp-bind.c',
         'test/test-udp-dgram-too-big.c',
         'test/test-udp-ipv6.c',
