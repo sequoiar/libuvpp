@@ -458,11 +458,11 @@ TEST_IMPL(device_tun_echo) {
     uint32_t p2p[2];
     uint32_t enable = 1;
 
-    ioarg.nInBufferSize = sizeof(version);
-    ioarg.lpInBuffer = (void*)version;
-    ioarg.nOutBufferSize = sizeof(version);
-    ioarg.lpOutBuffer = (void*)version;
-    ioarg.lpBytesReturned = 0;
+    ioarg.input_len = sizeof(version);
+    ioarg.input = (void*)version;
+    ioarg.output_len = sizeof(version);
+    ioarg.output = (void*)version;
+    ioarg.size = 0;
 
     r = uv_device_ioctl(&device, TAP_IOCTL_GET_VERSION, &ioarg);
     ASSERT(r == 0);
@@ -471,20 +471,20 @@ TEST_IMPL(device_tun_echo) {
     p2p[0] = inet_addr("10.3.0.2");
     p2p[1] = inet_addr("10.3.0.1");
 
-    ioarg.nInBufferSize = sizeof(p2p);
-    ioarg.lpInBuffer = (void*)&p2p;
-    ioarg.nOutBufferSize = sizeof(p2p);
-    ioarg.lpOutBuffer = (void*)&p2p;
-    ioarg.lpBytesReturned = 0;
+    ioarg.input_len = sizeof(p2p);
+    ioarg.input = (void*)&p2p;
+    ioarg.output_len = sizeof(p2p);
+    ioarg.output = (void*)&p2p;
+    ioarg.size = 0;
 
     r = uv_device_ioctl(&device, TAP_IOCTL_CONFIG_POINT_TO_POINT, &ioarg);
     ASSERT(r == 0);
 
-    ioarg.nInBufferSize = sizeof(enable);
-    ioarg.lpInBuffer = (void*)&enable;
-    ioarg.nOutBufferSize = sizeof(enable);
-    ioarg.lpOutBuffer = (void*)&enable;
-    ioarg.lpBytesReturned = 0;
+    ioarg.input_len = sizeof(enable);
+    ioarg.input = (void*)&enable;
+    ioarg.output_len = sizeof(enable);
+    ioarg.output = (void*)&enable;
+    ioarg.size = 0;
 
     r = uv_device_ioctl(&device, TAP_IOCTL_SET_MEDIA_STATUS, &ioarg);
     ASSERT(r == 0);

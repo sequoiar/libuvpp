@@ -485,11 +485,11 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
 
 /* should change to *nux style */
 typedef struct uv_ioargs_s {
-  _In_opt_     LPVOID lpInBuffer;
-  _In_         DWORD nInBufferSize;
-  _Out_opt_    LPVOID lpOutBuffer;
-  _In_         DWORD nOutBufferSize;
-  _Out_opt_    DWORD lpBytesReturned;
+  void* input;
+  uint32_t input_len;
+  void* output;
+  uint32_t output_len;
+  uint32_t size;          /* ouput returned bytes */
   /*
   _Inout_opt_  LPOVERLAPPED lpOverlapped;
   */

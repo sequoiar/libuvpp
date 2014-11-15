@@ -87,14 +87,14 @@ int uv_device_ioctl(uv_device_t* device, int cmd, void* arg) {
   BOOL r;
 
   assert(device && device->handle != INVALID_HANDLE_VALUE);
-  assert(args && args->nInBufferSize && args->nOutBufferSize);
+  assert(args && args->input_len && args->output_len);
   r = DeviceIoControl(device->handle, 
     (DWORD) cmd,
-    args->lpInBuffer,
-    args->nInBufferSize,
-    args->lpOutBuffer,
-    args->nOutBufferSize,
-    &args->lpBytesReturned,
+    args->input,
+    args->input_len,
+    args->output,
+    args->output_len,
+    &args->size,
     NULL);
   if (r) 
     return 0;
