@@ -216,7 +216,7 @@ test_run_tests_SOURCES = test/blackhole-server.c \
                          test/test-timer-from-check.c \
                          test/test-timer.c \
                          test/test-tty.c \
-						 test/test-device-tun-echo.c \
+                         test/test-device-tun-echo.c \
                          test/test-udp-bind.c \
                          test/test-udp-dgram-too-big.c \
                          test/test-udp-ipv6.c \
