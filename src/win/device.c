@@ -42,16 +42,13 @@ int uv_device_init(uv_loop_t* loop, uv_device_t* handle) {
 };
 
 int uv_device_open(uv_loop_t* loop,
-    uv_device_t* handle, const char* path, int flags) {
+                   uv_device_t* handle,
+                   const char* path,
+                   int flags) {
   DWORD dwCreationDisposition;
 
   assert(handle && handle->handle == INVALID_HANDLE_VALUE);
   uv_connection_init((uv_stream_t*) handle);
-
-  handle->buf.len = 64 * 1024;
-  handle->buf.base = malloc(handle->buf.len);
-  if (handle->buf.base == NULL) 
-    uv_fatal_error(ERROR_OUTOFMEMORY, "malloc"); 
 
   dwCreationDisposition = 0;
   if ( flags & O_RDONLY ) 
@@ -123,6 +120,11 @@ static void uv_device_queue_read(uv_loop_t* loop, uv_device_t* handle) {
 
   req = &handle->read_req;
   memset(&req->overlapped, 0, sizeof(req->overlapped));
+  handle->alloc_cb((uv_handle_t*) handle, 65536, &handle->buf);
+  if (handle->buf.len == 0) {
+    handle->read_cb((uv_stream_t *)handle, UV_ENOBUFS, &handle->buf);
+    return;
+  }
 
   r = ReadFile(handle->handle,
     handle->buf.base,
@@ -171,11 +173,11 @@ int uv_device_read_start(uv_device_t* handle, uv_alloc_cb alloc_cb,
 
 
 int uv_device_write(uv_loop_t* loop,
-                 uv_write_t* req,
-                 uv_device_t* handle,
-                 const uv_buf_t bufs[],
-                 unsigned int nbufs,
-                 uv_write_cb cb) {
+                    uv_write_t* req,
+                    uv_device_t* handle,
+                    const uv_buf_t bufs[],
+                    unsigned int nbufs,
+                    uv_write_cb cb) {
   int result;
   DWORD err = 0;
   
@@ -223,10 +225,10 @@ int uv_device_write(uv_loop_t* loop,
   return 0;
 }
 
-void uv_process_device_read_req(uv_loop_t* loop, uv_device_t* handle,
-    uv_req_t* req) {
+void uv_process_device_read_req(uv_loop_t* loop,
+                                uv_device_t* handle,
+                                uv_req_t* req) {
   DWORD err;
-  uv_buf_t buf;
 
   assert(handle->type == UV_DEVICE);
 
@@ -238,24 +240,18 @@ void uv_process_device_read_req(uv_loop_t* loop, uv_device_t* handle,
     if (handle->flags & UV_HANDLE_READING)  {
       handle->flags &= ~UV_HANDLE_READING;
       DECREASE_ACTIVE_COUNT(loop, handle);
-      
-      handle->alloc_cb((uv_handle_t*)handle,
-        req->overlapped.InternalHigh, &buf);
-      memcpy(buf.base,handle->buf.base,req->overlapped.InternalHigh);
+
       err = GET_REQ_SOCK_ERROR(req);
       handle->read_cb((uv_stream_t*)handle,
                       uv_translate_sys_error(err),
-                      &buf);
+                      &handle->buf);
     }
   }else {
     if (req->overlapped.InternalHigh > 0) {
       /* Successful read */
-      handle->alloc_cb((uv_handle_t*)handle, 
-        req->overlapped.InternalHigh, &buf);
-      memcpy(buf.base,handle->buf.base,req->overlapped.InternalHigh);
       handle->read_cb((uv_stream_t*)handle,
         req->overlapped.InternalHigh,
-        &buf);
+        &handle->buf);
       /* not sure this, are we need repeat read ? */
       /* Read again only if bytes == buf.len */
       if (req->overlapped.InternalHigh < sizeof(handle->buf))
@@ -268,9 +264,7 @@ void uv_process_device_read_req(uv_loop_t* loop, uv_device_t* handle,
       }
       handle->flags &= ~UV_HANDLE_READABLE;
 
-      buf.base = 0;
-      buf.len = 0;
-      handle->read_cb((uv_stream_t*)handle, UV_EOF, &buf);
+      handle->read_cb((uv_stream_t*)handle, UV_EOF, &handle->buf);
       goto done;
     }
   }
@@ -288,8 +282,9 @@ done:
 }
 
 
-void uv_process_device_write_req(uv_loop_t* loop, uv_device_t* handle,
-    uv_write_t* req) {
+void uv_process_device_write_req(uv_loop_t* loop,
+                                 uv_device_t* handle,
+                                 uv_write_t* req) {
   int err;
 
   assert(handle->type == UV_DEVICE);
@@ -339,14 +334,16 @@ void uv_device_close(uv_loop_t* loop, uv_device_t* device) {
     uv_want_endgame(device->loop, (uv_handle_t*)device);
 }
 
-/* TODO: remove me */
-void uv_process_device_accept_req(uv_loop_t* loop, uv_device_t* handle,
-  uv_req_t* raw_req) {
+/* this should never be called */
+void uv_process_device_accept_req(uv_loop_t* loop, 
+                                  uv_device_t* handle,
+                                  uv_req_t* raw_req) {
     abort();
 }
 
-/* TODO: remove me */
-void uv_process_device_connect_req(uv_loop_t* loop, uv_device_t* handle,
-  uv_connect_t* req) {
+/* this should never be called */
+void uv_process_device_connect_req(uv_loop_t* loop, 
+                                   uv_device_t* handle,
+                                   uv_connect_t* req) {
     abort();
 }
