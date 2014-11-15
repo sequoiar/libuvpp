@@ -37,6 +37,9 @@ int uv_device_open(uv_loop_t* loop,
     uv_device_t* device, const char*path, int flags) {
   int fd, err;
   int stream_flags;
+
+  assert(flags & O_RDONLY || flags & O_WRONLY || flags & O_RDWR);
+
   if( (fd = open(path, flags)) < 0 ) {
     return -errno;
   } 

@@ -45,7 +45,7 @@ int uv_device_open(uv_loop_t* loop,
     uv_device_t* handle, const char* path, int flags) {
   DWORD dwCreationDisposition;
 
-  assert(handle && handle->handle != INVALID_HANDLE_VALUE);
+  assert(handle && handle->handle == INVALID_HANDLE_VALUE);
   uv_connection_init((uv_stream_t*) handle);
 
   handle->buf.len = 64 * 1024;
