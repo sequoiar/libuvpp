@@ -3,7 +3,7 @@ libuv may be distributed alone under Node's license:
 
 ====
 
-Copyright Joyent, Inc. and other Node contributors. All rights reserved.
+Copyright Joyent, Inc, tom zhou(iwebpp@gmail.com) and other Node contributors. All rights reserved.
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
 deal in the Software without restriction, including without limitation the
@@ -40,3 +40,6 @@ The externally maintained libraries used by libuv are:
 
   - libeio, located at eio/ is copyright Marc Alexander Lehmann, and
     dual-licensed under the MIT license and GPL2.
+    
+  - UDT4, copyright yunhong gu, and under BSD license.
+  
