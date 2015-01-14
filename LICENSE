@@ -2,7 +2,7 @@ libuvpp's license follows:
 
 ====
 
-Copyright Joyent, Inc, yunhong gu, tom zhou(iwebpp@gmail.com) and other Node contributors. All rights reserved.
+Copyright Joyent, Inc, yunhong gu, tom zhou(iwebpp@gmail.com) and other libuvpp contributors. All rights reserved.
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
 deal in the Software without restriction, including without limitation the
@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 ====
 
-This license applies to all parts of libuv that are not externally
+This license applies to all parts of libuvpp that are not externally
 maintained libraries.
 
 The externally maintained libraries used by libuv are:
