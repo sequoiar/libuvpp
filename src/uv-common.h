@@ -28,18 +28,12 @@
 #define UV_COMMON_H_
 
 #include <assert.h>
-#include <stdarg.h>
 #include <stddef.h>
-
-#if defined(_MSC_VER) && _MSC_VER < 1600
-# include "stdint-msvc2008.h"
-#else
-# include <stdint.h>
-#endif
+#include <stdint.h>
 
 #include "uv.h"
 #include "tree.h"
-#include "queue.h"
+
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -59,14 +53,12 @@
 enum {
   UV__HANDLE_INTERNAL = 0x8000,
   UV__HANDLE_ACTIVE   = 0x4000,
-  UV__HANDLE_REF      = 0x2000,
-  UV__HANDLE_CLOSING  = 0 /* no-op on unix */
+  UV__HANDLE_REF      = 0x2000
 };
 #else
 # define UV__HANDLE_INTERNAL  0x80
 # define UV__HANDLE_ACTIVE    0x40
 # define UV__HANDLE_REF       0x20
-# define UV__HANDLE_CLOSING   0x01
 #endif
 
 extern const uv_err_t uv_ok_;
@@ -138,14 +130,7 @@ UNUSED static void uv__active_handle_add(uv_handle_t* h) {
 UNUSED static void uv__active_handle_rm(uv_handle_t* h) {
   h->loop->active_handles--;
 }
-#define uv__is_active(h)                                                      \
-  (((h)->flags & UV__HANDLE_ACTIVE) != 0)
 
-#define uv__is_stream(h)                                                      \
-  ((h)->type == UV_TCP ||                                                     \
-   (h)->type == UV_TTY ||                                                     \
-   (h)->type == UV_DEVICE ||                                                  \
-   (h)->type == UV_NAMED_PIPE)
 
 #define uv__active_handle_add(h) uv__active_handle_add((uv_handle_t*)(h))
 #define uv__active_handle_rm(h) uv__active_handle_rm((uv_handle_t*)(h))

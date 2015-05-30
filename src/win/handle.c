@@ -21,7 +21,6 @@
 
 #include <assert.h>
 #include <io.h>
-#include <stdlib.h>
 
 #include "uv.h"
 #include "internal.h"
