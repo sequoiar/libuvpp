@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <errno.h>
 
 int uv_device_init(uv_loop_t* loop,
                    uv_device_t* device,
