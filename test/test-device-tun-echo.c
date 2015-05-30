@@ -298,10 +298,14 @@ static void after_write(uv_write_t* req, int status) {
   if (status == 0)
     return;
 
+#if 0
   fprintf(stderr,
           "uv_write error: %s - %s\n",
           uv_err_name(status),
           uv_strerror(status));
+#else
+  FATAL("uv_write failed");
+#endif
 }
 
 static void after_shutdown(uv_shutdown_t* req, int status) {
@@ -508,6 +512,6 @@ TEST_IMPL(device_tun_echo) {
   r = uv_read_start((uv_stream_t*) &device, echo_alloc, after_read);
   ASSERT(r == 0);
 
-  uv_run(loop, UV_RUN_DEFAULT);
+  uv_run(loop);
   return 0;
 }
