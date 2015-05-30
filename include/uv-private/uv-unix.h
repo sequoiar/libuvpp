@@ -120,6 +120,13 @@ struct uv__io_s {
 # define UV_LOOP_PRIVATE_PLATFORM_FIELDS
 #endif
 
+
+/* struct parameters for uv_device_ioctl, need to extend */
+typedef struct uv_ioargs_s {
+  void* arg;
+} uv_ioargs_t; 
+
+
 #define UV_LOOP_PRIVATE_FIELDS                                                \
   /* Poll result queue */                                                     \
   eio_channel uv_eio_channel;                                                 \
@@ -191,6 +198,8 @@ struct uv__io_s {
 /* UV_TCP */
 #define UV_TCP_PRIVATE_FIELDS
 
+/* UV_DEVICE */
+#define UV_DEVICE_PRIVATE_FIELDS /* empty */
 
 /*
  * uv_udt_t is a subclass of uv_stream_t

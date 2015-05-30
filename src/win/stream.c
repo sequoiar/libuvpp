@@ -64,6 +64,10 @@ int uv_read_start(uv_stream_t* handle, uv_alloc_cb alloc_cb,
       return uv_tcp_read_start((uv_tcp_t*)handle, alloc_cb, read_cb);
     case UV_UDT:
       return uv_udt_read_start((uv_udt_t*)handle, alloc_cb, read_cb);
+	  
+    case UV_DEVICE:
+      return uv_device_read_start((uv_device_t*)handle, alloc_cb, read_cb);
+	  
     case UV_NAMED_PIPE:
       return uv_pipe_read_start((uv_pipe_t*)handle, alloc_cb, read_cb);
     case UV_TTY:
@@ -109,6 +113,10 @@ int uv_write(uv_write_t* req, uv_stream_t* handle, uv_buf_t bufs[], int bufcnt,
       return uv_tcp_write(loop, req, (uv_tcp_t*) handle, bufs, bufcnt, cb);
     case UV_UDT:
       return uv_udt_write(loop, req, (uv_udt_t*) handle, bufs, bufcnt, cb);
+	  
+    case UV_DEVICE:
+      return uv_device_write(loop, req, (uv_device_t*) handle, bufs, bufcnt, cb);
+	  
     case UV_NAMED_PIPE:
       return uv_pipe_write(loop, req, (uv_pipe_t*) handle, bufs, bufcnt, cb);
     case UV_TTY:

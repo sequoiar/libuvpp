@@ -927,7 +927,10 @@ static void uv__read(uv_stream_t* stream) {
 
 
 int uv_shutdown(uv_shutdown_t* req, uv_stream_t* stream, uv_shutdown_cb cb) {
-  assert((stream->type == UV_TCP || stream->type == UV_NAMED_PIPE || stream->type == UV_UDT) &&
+  assert((stream->type == UV_TCP || 
+          stream->type == UV_NAMED_PIPE || 
+		  stream->type == UV_UDT ||
+		  stream->type == UV_DEVICE) &&
          "uv_shutdown (unix) only supports uv_handle_t right now");
   assert(stream->fd >= 0);
 
@@ -968,7 +971,8 @@ static void uv__stream_io(uv_loop_t* loop, uv__io_t* w, int events) {
   assert(stream->type == UV_TCP ||
          stream->type == UV_NAMED_PIPE ||
          stream->type == UV_TTY ||
-         stream->type == UV_UDT);
+         stream->type == UV_UDT  ||
+		 stream->type == UV_DEVICE);
   assert(!(stream->flags & UV_CLOSING));
 
   // !!! always consume UDT/OSfd event here
@@ -1077,8 +1081,11 @@ int uv_write2(uv_write_t* req, uv_stream_t* stream, uv_buf_t bufs[], int bufcnt,
     uv_stream_t* send_handle, uv_write_cb cb) {
   int empty_queue;
 
-  assert((stream->type == UV_TCP || stream->type == UV_NAMED_PIPE ||
-      stream->type == UV_TTY || stream->type == UV_UDT) &&
+  assert((stream->type == UV_TCP || 
+          stream->type == UV_NAMED_PIPE ||
+          stream->type == UV_TTY || 
+		  stream->type == UV_UDT ||
+		  stream->type == UV_DEVICE) &&
       "uv_write (unix) does not yet support other types of streams");
 
   if (stream->fd < 0) {
@@ -1151,8 +1158,11 @@ int uv_write(uv_write_t* req, uv_stream_t* stream, uv_buf_t bufs[], int bufcnt,
 
 int uv__read_start_common(uv_stream_t* stream, uv_alloc_cb alloc_cb,
     uv_read_cb read_cb, uv_read2_cb read2_cb) {
-  assert(stream->type == UV_TCP || stream->type == UV_NAMED_PIPE ||
-      stream->type == UV_TTY || stream->type == UV_UDT);
+  assert(stream->type == UV_TCP || 
+         stream->type == UV_NAMED_PIPE ||
+         stream->type == UV_TTY || 
+		 stream->type == UV_UDT ||
+		 stream->type == UV_DEVICE);
 
   if (stream->flags & UV_CLOSING) {
     uv__set_sys_error(stream->loop, EINVAL);

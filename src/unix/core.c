@@ -73,7 +73,11 @@ void uv_close(uv_handle_t* handle, uv_close_cb close_cb) {
   case UV_UDT:
     uv__stream_close((uv_stream_t*)handle);
     break;
-
+	
+  case UV_DEVICE:
+    uv__device_close((uv_device_t*)handle);
+    break;
+	
   case UV_UDP:
     uv__udp_close((uv_udp_t*)handle);
     break;
@@ -147,6 +151,7 @@ static void uv__finish_close(uv_handle_t* handle) {
     case UV_TCP:
     case UV_UDT:
     case UV_TTY:
+	case UV_DEVICE:
       assert(!uv__io_active(&((uv_stream_t*)handle)->read_watcher));
       assert(!uv__io_active(&((uv_stream_t*)handle)->write_watcher));
       assert(((uv_stream_t*)handle)->fd == -1);

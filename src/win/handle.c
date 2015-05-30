@@ -21,6 +21,7 @@
 
 #include <assert.h>
 #include <io.h>
+#include <stdlib.h>
 
 #include "uv.h"
 #include "internal.h"
@@ -83,7 +84,11 @@ void uv_close(uv_handle_t* handle, uv_close_cb cb) {
     case UV_UDT:
       uv_udt_close(loop, (uv_udt_t*)handle);
       return;
-
+	  
+    case UV_DEVICE:
+      uv_device_close(loop, (uv_device_t*)handle);
+      return;
+	  
     case UV_NAMED_PIPE:
       uv_pipe_close(loop, (uv_pipe_t*) handle);
       return;

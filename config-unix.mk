@@ -29,6 +29,7 @@ CPPFLAGS += -D_FILE_OFFSET_BITS=64
 
 OBJS += src/unix/async.o
 OBJS += src/unix/core.o
+OBJS += src/unix/device.o
 OBJS += src/unix/dl.o
 OBJS += src/unix/error.o
 OBJS += src/unix/fs.o
