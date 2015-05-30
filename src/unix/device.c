@@ -68,7 +68,7 @@ int uv_device_init(uv_loop_t* loop,
 int uv_device_ioctl(uv_device_t* device, int cmd, uv_ioargs_t* args) {
   int err;
 
-  err = ioctl(uv__stream_fd((uv_stream_t*) device), cmd, args->arg);
+  err = ioctl(((uv_stream_t*)device)->fd, cmd, args->arg);
   if (err < 0)
     return -errno;
   
