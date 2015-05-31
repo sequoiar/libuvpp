@@ -98,7 +98,7 @@ endif
 TESTS=test/blackhole-server.c test/echo-server.c test/test-*.c
 BENCHMARKS=test/blackhole-server.c test/echo-server.c test/dns-server.c test/benchmark-*.c
 
-all: uv.a test/run-benchmarks test/echo-server-udt test/echo-client-udt
+all: uv.a test/run-benchmarks test/echo-server-udt test/echo-client-udt test/echo-device-tun
 
 $(CARES_OBJS): %.o: %.c
 	$(CC) -o $*.o -c $(CFLAGS) $(CPPFLAGS) $< -DHAVE_CONFIG_H
@@ -114,6 +114,9 @@ test/echo-server-udt: test/echo-server-udt.c uv.a
 
 test/echo-client-udt: test/echo-server-udt.c uv.a
 	$(CC) $(CPPFLAGS) -o test/echo-client-udt test/echo-client-udt.c uv.a -lstdc++ -lpthread -lm -lrt
+
+test/echo-device-tun: test/echo-device-tun.c uv.a
+	$(CC) $(CPPFLAGS) -o test/echo-device-tun test/echo-device-tun.c uv.a -lstdc++ -lpthread -lm -lrt
 
 test/run-tests$(E): test/*.h test/run-tests.c $(RUNNER_SRC) test/runner-unix.c $(TESTS) uv.a
 	$(CC) $(CPPFLAGS) $(RUNNER_CFLAGS) -o test/run-tests test/run-tests.c \

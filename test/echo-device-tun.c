@@ -373,7 +373,8 @@ void at_exit(uv_process_t *req, int64_t exit_status, int term_signal) {
   uv_close((uv_handle_t*) req, NULL);
 }
 
-TEST_IMPL(device_tun_echo) {
+///TEST_IMPL(device_tun_echo) {
+int main(int argc, char * argv[]) {
   #define BUF_SZ 1024
   uv_device_t device;
   char buff[BUF_SZ] = {0};
