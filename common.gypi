@@ -40,7 +40,11 @@
         'conditions': [
           ['OS != "win"', {
             'defines': [ 'EV_VERIFY=2' ],
-          }],
+		  }],
+		  ['OS == "android"', {
+		    'cflags': [ '-fPIE' ],
+		    'ldflags': [ '-fPIE', '-pie' ],
+		  }],
         ]
       },
       'Release': {
