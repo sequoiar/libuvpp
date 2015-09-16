@@ -40,6 +40,8 @@
 #define UV_HANDLE_CLOSED                        0x00000002
 #define UV_HANDLE_ENDGAME_QUEUED                0x00000004
 #define UV_HANDLE_ACTIVE                        0x00000010
+#define UV_HANDLE_READABLE                      0x00000020
+#define UV_HANDLE_WRITABLE                      0x00000040
 
 /* uv-common.h: #define UV__HANDLE_ACTIVE       0x00000040 */
 /* uv-common.h: #define UV__HANDLE_REF          0x00000020 */

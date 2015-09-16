@@ -240,9 +240,9 @@ CUDT::CUDT()
   
    // !!! fixed iMSS to 1492 for RPI, need to root cause /////////////
    ///m_iMSS = 1500;
-   m_iMSS = 1492;
-   // !!! fixed iMSS to 1488 for MTU of some router, TBD...
-   ///m_iMSS = 1488;
+   ///m_iMSS = 1492;
+   // !!! fixed iMSS to 1480 for MTU of some router, TBD...
+   m_iMSS = 1480;
    ////////////////////////////////////////////////////////////////////  
  
    m_bSynSending = true;

@@ -1881,6 +1881,7 @@ struct uv_counters_s {
   uint64_t tcp_init;
   uint64_t timer_init;
   uint64_t tty_init;
+  uint64_t device_init;
   uint64_t udp_init;
   uint64_t udt_init;
 };

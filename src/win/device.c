@@ -41,7 +41,7 @@ int uv_device_init(uv_loop_t* loop,
 
   assert(handle);
   if (flags != O_RDONLY && flags != O_WRONLY && flags != O_RDWR)
-    return -EINVAL;
+    return WSAEINVAL;
 
   dwCreationDisposition = 0;
   uvflags = 0; 
@@ -126,7 +126,7 @@ static void uv_device_queue_read(uv_loop_t* loop, uv_device_t* handle) {
   memset(&req->overlapped, 0, sizeof(req->overlapped));
   handle->alloc_cb((uv_handle_t*) handle, 65536, &handle->read_buffer);
   if (handle->read_buffer.len == 0) {
-    handle->read_cb((uv_stream_t*) handle, UV_ENOBUFS, &handle->read_buffer);
+    handle->read_cb((uv_stream_t*) handle, UV_ENOBUFS, handle->read_buffer);
     return;
   }
 
@@ -221,7 +221,7 @@ int uv_device_write(uv_loop_t* loop,
     if (err != ERROR_IO_PENDING)
       return GetLastError();
 
-    req->queued_bytes = uv__count_bufs(bufs, nbufs);
+    req->queued_bytes = uv_count_bufs(bufs, nbufs);
     handle->reqs_pending++;
     handle->write_reqs_pending++;
     REGISTER_HANDLE_REQ(loop, handle, req);
@@ -249,14 +249,14 @@ void uv_process_device_read_req(uv_loop_t* loop,
       err = GET_REQ_SOCK_ERROR(req);
       handle->read_cb((uv_stream_t*) handle,
                       uv_translate_sys_error(err),
-                      &handle->read_buffer);
+                      handle->read_buffer);
     }
   } else {
     if (req->overlapped.InternalHigh > 0) {
       /* Successful read */
       handle->read_cb((uv_stream_t*) handle,
                       req->overlapped.InternalHigh,
-                      &handle->read_buffer);
+                      handle->read_buffer);
       /* Read again only if bytes == buf.len */
       if (req->overlapped.InternalHigh < sizeof(handle->read_buffer.len))
         goto done;
@@ -268,7 +268,7 @@ void uv_process_device_read_req(uv_loop_t* loop,
       }
       handle->flags &= ~UV_HANDLE_READABLE;
 
-      handle->read_cb((uv_stream_t*) handle, UV_EOF, &handle->read_buffer);
+      handle->read_cb((uv_stream_t*) handle, UV_EOF, handle->read_buffer);
       goto done;
     }
   }
@@ -323,7 +323,8 @@ void uv_device_close(uv_loop_t* loop, uv_device_t* device) {
   device->handle = INVALID_HANDLE_VALUE;
 
   device->flags &= ~(UV_HANDLE_READABLE | UV_HANDLE_WRITABLE);
-  uv__handle_closing(device);
+  ///uv__handle_closing(device);
+  uv__handle_start(device);
 
   if (device->reqs_pending == 0)
     uv_want_endgame(device->loop, (uv_handle_t*) device);
