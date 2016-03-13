@@ -29,6 +29,8 @@
       'include_dirs': [
         'include',
         'src/',
+        'src/UDT4/src/',
+        'src/nacl/',
       ],
       'direct_dependent_settings': {
         'include_dirs': [ 'include' ],
@@ -54,6 +56,8 @@
         'include/uv-errno.h',
         'include/uv-threadpool.h',
         'include/uv-version.h',
+	'src/UDT4/src/udtc.h',
+        'src/nacl/tweetnacl.h',
         'src/fs-poll.c',
         'src/heap-inl.h',
         'src/inet.c',
@@ -62,12 +66,29 @@
         'src/uv-common.c',
         'src/uv-common.h',
         'src/version.c'
+        'src/UDT4/src/api.cpp',
+        'src/UDT4/src/buffer.cpp',
+        'src/UDT4/src/cache.cpp',
+        'src/UDT4/src/ccc.cpp',
+        'src/UDT4/src/channel.cpp',
+        'src/UDT4/src/common.cpp',
+        'src/UDT4/src/udt_core.cpp',
+        'src/UDT4/src/epoll.cpp',
+        'src/UDT4/src/list.cpp',
+        'src/UDT4/src/md5.cpp',
+        'src/UDT4/src/packet.cpp',
+        'src/UDT4/src/queue.cpp',
+        'src/UDT4/src/udtc.cpp',
+        'src/UDT4/src/window.cpp',
+        'src/nacl/tweetnacl.c',
       ],
       'conditions': [
         [ 'OS=="win"', {
           'defines': [
             '_WIN32_WINNT=0x0600',
             '_GNU_SOURCE',
+            'EVPIPE_OSFD',
+            'UDT_EXPORTS'
           ],
           'sources': [
             'include/uv-win.h',
@@ -99,6 +120,7 @@
             'src/win/tty.c',
             'src/win/timer.c',
             'src/win/udp.c',
+            'src/win/udt.c',
             'src/win/util.c',
             'src/win/winapi.c',
             'src/win/winapi.h',
@@ -122,7 +144,13 @@
             '-pedantic',
             '-Wall',
             '-Wextra',
-            '-Wno-unused-parameter',
+            '-Wno-unused-parameter'
+            '-finline-functions',
+            '-fno-strict-aliasing',
+            '-fvisibility=hidden',
+            '-DEVPIPE_OSFD',
+            '-frtti',
+            '-fexceptions',
           ],
           'sources': [
             'include/uv-unix.h',
@@ -152,9 +180,13 @@
             'src/unix/timer.c',
             'src/unix/tty.c',
             'src/unix/udp.c',
+            'src/unix/udt.c',
           ],
           'link_settings': {
-            'libraries': [ '-lm' ],
+            'libraries': [ 
+              '-lm', 
+              '-lstdc++', 
+            ],
             'conditions': [
               ['OS=="solaris"', {
                 'ldflags': [ '-pthreads' ],
@@ -188,6 +220,8 @@
           'defines': [
             '_DARWIN_USE_64_BIT_INODE=1',
             '_DARWIN_UNLIMITED_SELECT=1',
+            'EVPIPE_OSFD=1',
+            'OSX=1',
           ]
         }],
         [ 'OS!="mac"', {
@@ -203,6 +237,9 @@
             'src/unix/linux-syscalls.c',
             'src/unix/linux-syscalls.h',
           ],
+          'defines': [
+            'LINUX=1'
+          ],
           'link_settings': {
             'libraries': [ '-ldl', '-lrt' ],
           },
@@ -215,6 +252,10 @@
             'src/unix/linux-syscalls.h',
             'src/unix/pthread-fixes.c',
             'src/unix/android-ifaddrs.c'
+          ],
+          'defines': [
+            'LINUX=1',
+            'ANDROID',
           ],
           'link_settings': {
             'libraries': [ '-ldl' ],

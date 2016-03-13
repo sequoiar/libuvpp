@@ -283,6 +283,18 @@ typedef struct {
 
 #define UV_TCP_PRIVATE_FIELDS /* empty */
 
+
+/*
+ * uv_udt_t is a subclass of uv_stream_t
+ *
+ * Represents a UDT stream or UDT server.
+ */
+
+#define UV_UDT_PRIVATE_FIELDS \
+    int udtfd; \
+    int accepted_udtfd;
+
+
 #define UV_UDP_PRIVATE_FIELDS                                                 \
   uv_alloc_cb alloc_cb;                                                       \
   uv_udp_recv_cb recv_cb;                                                     \

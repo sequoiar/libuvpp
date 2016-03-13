@@ -115,6 +115,8 @@
         'msvs_cygwin_shell': 0, # prevent actions from trying to use cygwin
         'defines': [
           'WIN32',
+          'EVPIPE_OSFD',
+          'UDT_EXPORTS',
           # we don't really want VC++ warning us about
           # how dangerous C functions are...
           '_CRT_SECURE_NO_DEPRECATE',
@@ -130,7 +132,7 @@
       }],
       ['OS in "freebsd dragonflybsd linux openbsd solaris android"', {
         'cflags': [ '-Wall' ],
-        'cflags_cc': [ '-fno-rtti', '-fno-exceptions' ],
+        'cflags_cc': [ '-frtti', '-fexceptions', '-DEVPIPE_OSFD' ],
         'target_conditions': [
           ['_type=="static_library"', {
             'standalone_static_library': 1, # disable thin archive which needs binutils >= 2.19
@@ -146,7 +148,7 @@
             'ldflags': [ '-mx32' ],
           }],
           [ 'OS=="linux"', {
-            'cflags': [ '-ansi' ],
+            'cflags': [ '-ansi', '-DLINUX'  ],
           }],
           [ 'OS=="solaris"', {
             'cflags': [ '-pthreads' ],
@@ -167,8 +169,8 @@
           'GCC_CW_ASM_SYNTAX': 'NO',                # No -fasm-blocks
           'GCC_DYNAMIC_NO_PIC': 'NO',               # No -mdynamic-no-pic
                                                     # (Equivalent to -fPIC)
-          'GCC_ENABLE_CPP_EXCEPTIONS': 'NO',        # -fno-exceptions
-          'GCC_ENABLE_CPP_RTTI': 'NO',              # -fno-rtti
+          'GCC_ENABLE_CPP_EXCEPTIONS': 'YES',       # -fno-exceptions
+          'GCC_ENABLE_CPP_RTTI': 'YES',             # -fno-rtti
           'GCC_ENABLE_PASCAL_STRINGS': 'NO',        # No -mpascal-strings
           # GCC_INLINES_ARE_PRIVATE_EXTERN maps to -fvisibility-inlines-hidden
           'GCC_INLINES_ARE_PRIVATE_EXTERN': 'YES',
@@ -177,7 +179,9 @@
           'PREBINDING': 'NO',                       # No -Wl,-prebind
           'USE_HEADERMAP': 'NO',
           'OTHER_CFLAGS': [
-            '-fstrict-aliasing',
+            '-fno-strict-aliasing',
+            '-DEVPIPE_OSFD',
+            '-DOSX',
           ],
           'WARNING_CFLAGS': [
             '-Wall',

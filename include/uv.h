@@ -158,6 +158,7 @@ extern "C" {
   XX(TTY, tty)                                                                \
   XX(UDP, udp)                                                                \
   XX(SIGNAL, signal)                                                          \
+  XX(UDT, udt)                                                                \
 
 #define UV_REQ_TYPE_MAP(XX)                                                   \
   XX(REQ, req)                                                                \
@@ -201,6 +202,7 @@ typedef struct uv_loop_s uv_loop_t;
 typedef struct uv_handle_s uv_handle_t;
 typedef struct uv_stream_s uv_stream_t;
 typedef struct uv_tcp_s uv_tcp_t;
+typedef struct uv_udt_s uv_udt_t;
 typedef struct uv_udp_s uv_udp_t;
 typedef struct uv_pipe_s uv_pipe_t;
 typedef struct uv_tty_s uv_tty_t;
@@ -375,6 +377,9 @@ UV_EXTERN const char* uv_err_name(int err);
   void* active_queue[2];                                                      \
   void* reserved[4];                                                          \
   UV_REQ_PRIVATE_FIELDS                                                       \
+  /* udt-only */ \
+  char udtdummy; \
+  int udtflag; \
 
 /* Abstract base class of all requests. */
 struct uv_req_s {
@@ -547,8 +552,107 @@ struct uv_connect_s {
   UV_CONNECT_PRIVATE_FIELDS
 };
 
+struct uv_udt_s {
+  UV_HANDLE_FIELDS
+  UV_STREAM_FIELDS
+  UV_TCP_PRIVATE_FIELDS
+  UV_UDT_PRIVATE_FIELDS
+};
+
+UV_EXTERN int uv_udt_init(uv_loop_t*, uv_udt_t* handle);
+
+/* Enable/disable Nagle's algorithm. */
+UV_EXTERN int uv_udt_nodelay(uv_udt_t* handle, int enable);
+
+/* Enable/disable TCP keep-alive.
+ *
+ * `ms` is the initial delay in seconds, ignored when `enable` is zero.
+ */
+UV_EXTERN int uv_udt_keepalive(uv_udt_t* handle, int enable,
+    unsigned int delay);
+
+/* Enable/disable UDT socket in rendezvous mode */
+UV_EXTERN int uv_udt_setrendez(uv_udt_t* handle, int enable);
+
+/* set UDT socket qos/priority */
+UV_EXTERN int uv_udt_setqos(uv_udt_t* handle, int qos);
+
+/* set UDT socket maxim bandwidth bytes/second */
+UV_EXTERN int uv_udt_setmbw(uv_udt_t* handle, int64_t mbw);
+
+/* set UDT socket maxim buffer size */
+UV_EXTERN int uv_udt_setmbs(uv_udt_t* handle, int32_t mfc, int32_t mudt, int32_t mudp);
+
+/* set UDT socket security mode */
+UV_EXTERN int uv_udt_setsec(uv_udt_t* handle, int32_t mode, unsigned char keybuf[], int32_t keylen);
+
+UV_EXTERN int uv_udt_bind(uv_udt_t* handle, struct sockaddr_in);
+UV_EXTERN int uv_udt_bind6(uv_udt_t* handle, struct sockaddr_in6);
+UV_EXTERN int uv_udt_getsockname(uv_udt_t* handle, struct sockaddr* name,
+    int* namelen);
+UV_EXTERN int uv_udt_getpeername(uv_udt_t* handle, struct sockaddr* name,
+    int* namelen);
+
+/* binding udt socket on existing udp socket/fd */
+UV_EXTERN int uv_udt_bindfd(uv_udt_t* handle, uv_os_sock_t udpfd);
 
 /*
+ * uv_udt_connect, uv_udt_connect6
+ * These functions establish IPv4 and IPv6 UDT connections. Provide an
+ * initialized UDT handle and an uninitialized uv_connect_t*. The callback
+ * will be made when the connection is established.
+ */
+UV_EXTERN int uv_udt_connect(uv_connect_t* req, uv_udt_t* handle,
+    struct sockaddr_in address, uv_connect_cb cb);
+UV_EXTERN int uv_udt_connect6(uv_connect_t* req, uv_udt_t* handle,
+    struct sockaddr_in6 address, uv_connect_cb cb);
+
+UV_EXTERN int uv_udt_punchhole(uv_udt_t* handle, struct sockaddr_in address, int32_t from, int32_t to);
+UV_EXTERN int uv_udt_punchhole6(uv_udt_t* handle, struct sockaddr_in6 address, int32_t from, int32_t to);
+
+/* UDT network performance track */
+typedef struct uv_netperf_
+{
+   // global measurements
+   int64_t msTimeStamp;                 // time since the UDT entity is started, in milliseconds
+   int64_t pktSentTotal;                // total number of sent data packets, including retransmissions
+   int64_t pktRecvTotal;                // total number of received packets
+   int pktSndLossTotal;                 // total number of lost packets (sender side)
+   int pktRcvLossTotal;                 // total number of lost packets (receiver side)
+   int pktRetransTotal;                 // total number of retransmitted packets
+   int pktSentACKTotal;                 // total number of sent ACK packets
+   int pktRecvACKTotal;                 // total number of received ACK packets
+   int pktSentNAKTotal;                 // total number of sent NAK packets
+   int pktRecvNAKTotal;                 // total number of received NAK packets
+   int64_t usSndDurationTotal;          // total time duration when UDT is sending data (idle time exclusive)
+
+   // local measurements
+   int64_t pktSent;                     // number of sent data packets, including retransmissions
+   int64_t pktRecv;                     // number of received packets
+   int pktSndLoss;                      // number of lost packets (sender side)
+   int pktRcvLoss;                      // number of lost packets (receiver side)
+   int pktRetrans;                      // number of retransmitted packets
+   int pktSentACK;                      // number of sent ACK packets
+   int pktRecvACK;                      // number of received ACK packets
+   int pktSentNAK;                      // number of sent NAK packets
+   int pktRecvNAK;                      // number of received NAK packets
+   double mbpsSendRate;                 // sending rate in Mb/s
+   double mbpsRecvRate;                 // receiving rate in Mb/s
+   int64_t usSndDuration;		        // busy sending time (i.e., idle time exclusive)
+
+   // instant measurements
+   double usPktSndPeriod;               // packet sending period, in microseconds
+   int pktFlowWindow;                   // flow window size, in number of packets
+   int pktCongestionWindow;             // congestion window size, in number of packets
+   int pktFlightSize;                   // number of packets on flight
+   double msRTT;                        // RTT, in milliseconds
+   double mbpsBandwidth;                // estimated bandwidth, in Mb/s
+   int byteAvailSndBuf;                 // available UDT sender buffer size
+   int byteAvailRcvBuf;                 // available UDT receiver buffer size
+} uv_netperf_t;
+
+UV_EXTERN int uv_udt_getperf(uv_udt_t* handle, uv_netperf_t* perf, int clear);
+
  * UDP support.
  */
 

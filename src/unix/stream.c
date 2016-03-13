@@ -21,6 +21,7 @@
 
 #include "uv.h"
 #include "internal.h"
+#include "udtc.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,6 +40,17 @@
 # include <sys/event.h>
 # include <sys/time.h>
 # include <sys/select.h>
+
+// consume UDT Os fd event
+static void udt_consume_osfd(int os_fd)
+{
+	int saved_errno = errno;
+	char dummy;
+
+	recv(os_fd, &dummy, sizeof(dummy), 0);
+
+	errno = saved_errno;
+}
 
 /* Forward declaration */
 typedef struct uv__stream_select_s uv__stream_select_t;

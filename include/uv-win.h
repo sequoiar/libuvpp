@@ -354,7 +354,8 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
   UV_READ,                                                                    \
   UV_UDP_RECV,                                                                \
   UV_WAKEUP,                                                                  \
-  UV_SIGNAL_REQ,
+  UV_SIGNAL_REQ,                                                              \
+  UV_UDT_POLL,
 
 #define UV_REQ_PRIVATE_FIELDS                                                 \
   union {                                                                     \
@@ -366,11 +367,19 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
   } u;                                                                        \
   struct uv_req_s* next_req;
 
-#define UV_WRITE_PRIVATE_FIELDS                                               \
-  int ipc_header;                                                             \
-  uv_buf_t write_buffer;                                                      \
-  HANDLE event_handle;                                                        \
-  HANDLE wait_handle;
+
+#define UV_REQ_BUFSML_SIZE (4)
+
+#define UV_WRITE_PRIVATE_FIELDS           \
+  int ipc_header;                         \
+  uv_buf_t write_buffer;                  \
+  HANDLE event_handle;                    \
+  HANDLE wait_handle;                     \
+  int write_index;                        \
+  uv_buf_t* bufs;                         \
+  int bufcnt;                             \
+  int error;                              \
+  uv_buf_t bufsml[UV_REQ_BUFSML_SIZE];
 
 #define UV_CONNECT_PRIVATE_FIELDS                                             \
   /* empty */
@@ -391,6 +400,7 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
   typedef struct uv_tcp_accept_s {                                            \
     UV_REQ_FIELDS                                                             \
     SOCKET accept_socket;                                                     \
+    int accept_udtfd;                     \
     char accept_buffer[sizeof(struct sockaddr_storage) * 2 + 32];             \
     HANDLE event_handle;                                                      \
     HANDLE wait_handle;                                                       \
@@ -436,6 +446,39 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
     struct { uv_tcp_server_fields } serv;                                     \
     struct { uv_tcp_connection_fields } conn;                                 \
   } tcp;
+/*
+ * uv_udt_t is a subclass of uv_stream_t
+ *
+ * Represents a UDT stream or UDT server.
+ */
+#define UV_UDT_REQ_POLL        0x1
+#define UV_UDT_REQ_READ        0x2
+#define UV_UDT_REQ_WRITE       0x4
+#define UV_UDT_REQ_ACCEPT      0x8
+#define UV_UDT_REQ_CONNECT     0x10
+
+// dedicated error poll request
+#define UV_UDT_REQ_POLL_ERROR  0x100
+
+// active poll flags
+#define UV_UDT_REQ_POLL_ACTIVE 0x1000
+
+#define UV_UDT_PRIVATE_FIELDS                                                   \
+    int udtfd;                                                                  \
+    int accepted_udtfd;                                                         \
+    int udtflag;                                                                \
+    /* Tail of a single-linked circular queue of pending reqs. If the queue */  \
+    /* is empty, tail_ is NULL. If there is only one item, */                   \
+    /* tail_->next_req == tail_ */                                              \
+    uv_req_t* pending_reqs_tail_udtwrite;                                       \
+    uv_req_t* pending_reqs_tail_udtconnect;                                     \
+    uv_req_t* pending_reqs_tail_udtaccept;                                      \
+    uv_req_t  udtreq_poll;                                                      \
+    uv_req_t  udtreq_read;                                                      \
+    uv_req_t  udtreq_write;                                                     \
+    uv_req_t  udtreq_accept;                                                    \
+    uv_req_t  udtreq_connect;                                                   \
+    uv_req_t  udtreq_poll_error;
 
 #define UV_UDP_PRIVATE_FIELDS                                                 \
   SOCKET socket;                                                              \

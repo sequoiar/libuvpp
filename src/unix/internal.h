@@ -145,6 +145,7 @@ enum {
   UV_TCP_SINGLE_ACCEPT    = 0x1000, /* Only accept() when idle. */
   UV_HANDLE_IPV6          = 0x10000, /* Handle is bound to a IPv6 socket. */
   UV_UDP_PROCESSING       = 0x20000  /* Handle is running the send callback queue. */
+  UV_UDT_RENDEZ           = 0x40000  /* Set UDT socket in rendezvous mode */
 };
 
 /* loop flags */
@@ -211,6 +212,19 @@ int uv__open_cloexec(const char* path, int flags);
 int uv_tcp_listen(uv_tcp_t* tcp, int backlog, uv_connection_cb cb);
 int uv__tcp_nodelay(int fd, int on);
 int uv__tcp_keepalive(int fd, int on, unsigned int delay);
+
+/* udt */
+int udt__accept(int sockfd);
+//int udt__connect(uv_connect_t* req, uv_udt_* stream, struct sockaddr* addr,
+//    socklen_t addrlen, uv_connect_cb cb);
+
+int uv_udt_listen(uv_udt_t* tcp, int backlog, uv_connection_cb cb);
+int uv__udt_nodelay(uv_udt_t* handle, int enable);
+int uv__udt_keepalive(uv_udt_t* handle, int enable, unsigned int delay);
+
+/* UDT socket operation */
+int udt__nonblock(int fd, int set) __attribute__((unused));
+int udt__socket(int domain, int type, int protocol);
 
 /* pipe */
 int uv_pipe_listen(uv_pipe_t* handle, int backlog, uv_connection_cb cb);
