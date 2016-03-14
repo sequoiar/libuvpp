@@ -75,7 +75,8 @@
 typedef enum {
   TCP = 0,
   UDP,
-  PIPE
+  PIPE,
+  UDT
 } stream_type;
 
 /* Die with fatal error. */
