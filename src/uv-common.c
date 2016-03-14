@@ -237,6 +237,27 @@ int uv_tcp_bind(uv_tcp_t* handle,
 }
 
 
+
+int uv_udt_bind(uv_udt_t* handle,
+                const struct sockaddr* addr,
+                unsigned int flags) {
+  unsigned int addrlen;
+
+  if (handle->type != UV_UDT)
+    return UV_EINVAL;
+
+  if (addr->sa_family == AF_INET)
+    addrlen = sizeof(struct sockaddr_in);
+  else if (addr->sa_family == AF_INET6)
+    addrlen = sizeof(struct sockaddr_in6);
+  else
+    return UV_EINVAL;
+
+  return uv__udt_bind(handle, addr, addrlen, flags);
+}
+
+
+
 int uv_udp_bind(uv_udp_t* handle,
                 const struct sockaddr* addr,
                 unsigned int flags) {
@@ -274,6 +295,28 @@ int uv_tcp_connect(uv_connect_t* req,
 
   return uv__tcp_connect(req, handle, addr, addrlen, cb);
 }
+
+
+int uv_udt_connect(uv_connect_t* req,
+                   uv_udt_t* handle,
+                   const struct sockaddr* addr,
+                   uv_connect_cb cb) {
+  unsigned int addrlen;
+
+  if (handle->type != UV_UDT)
+    return UV_EINVAL;
+
+  if (addr->sa_family == AF_INET)
+    addrlen = sizeof(struct sockaddr_in);
+  else if (addr->sa_family == AF_INET6)
+    addrlen = sizeof(struct sockaddr_in6);
+  else
+    return UV_EINVAL;
+
+  return uv__udt_connect(req, handle, addr, addrlen, cb);
+}
+
+
 
 
 int uv_udp_send(uv_udp_send_t* req,

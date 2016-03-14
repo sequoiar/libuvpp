@@ -157,8 +157,8 @@ extern "C" {
   XX(TIMER, timer)                                                            \
   XX(TTY, tty)                                                                \
   XX(UDP, udp)                                                                \
-  XX(SIGNAL, signal)                                                          \
   XX(UDT, udt)                                                                \
+  XX(SIGNAL, signal)                                                          \
 
 #define UV_REQ_TYPE_MAP(XX)                                                   \
   XX(REQ, req)                                                                \
@@ -216,6 +216,8 @@ typedef struct uv_process_s uv_process_t;
 typedef struct uv_fs_event_s uv_fs_event_t;
 typedef struct uv_fs_poll_s uv_fs_poll_t;
 typedef struct uv_signal_s uv_signal_t;
+
+typedef struct uv_counters_s uv_counters_t;
 
 /* Request types. */
 typedef struct uv_req_s uv_req_t;
@@ -376,10 +378,10 @@ UV_EXTERN const char* uv_err_name(int err);
   /* private */                                                               \
   void* active_queue[2];                                                      \
   void* reserved[4];                                                          \
+  /* udt-only */                                                              \
+  char udtdummy;                                                              \
+  int udtflag;                                                                \
   UV_REQ_PRIVATE_FIELDS                                                       \
-  /* udt-only */ \
-  char udtdummy; \
-  int udtflag; \
 
 /* Abstract base class of all requests. */
 struct uv_req_s {
@@ -417,6 +419,7 @@ struct uv_shutdown_s {
     void* reserved[4];                                                        \
   } u;                                                                        \
   UV_HANDLE_PRIVATE_FIELDS                                                    \
+
 
 /* The abstract base class of all handles. */
 struct uv_handle_s {
@@ -552,6 +555,14 @@ struct uv_connect_s {
   UV_CONNECT_PRIVATE_FIELDS
 };
 
+
+/* ------------------ for UDT  --------------------*/
+
+enum uv_udt_flags {
+        /* Used with uv_tcp_bind, when an IPv6 address is used. */
+    UV_UDT_IPV6ONLY = 1
+};
+    
 struct uv_udt_s {
   UV_HANDLE_FIELDS
   UV_STREAM_FIELDS
@@ -559,7 +570,10 @@ struct uv_udt_s {
   UV_UDT_PRIVATE_FIELDS
 };
 
+
 UV_EXTERN int uv_udt_init(uv_loop_t*, uv_udt_t* handle);
+
+UV_EXTERN int uv_udt_open(uv_udt_t* handle, uv_os_sock_t sock);
 
 /* Enable/disable Nagle's algorithm. */
 UV_EXTERN int uv_udt_nodelay(uv_udt_t* handle, int enable);
@@ -586,29 +600,38 @@ UV_EXTERN int uv_udt_setmbs(uv_udt_t* handle, int32_t mfc, int32_t mudt, int32_t
 /* set UDT socket security mode */
 UV_EXTERN int uv_udt_setsec(uv_udt_t* handle, int32_t mode, unsigned char keybuf[], int32_t keylen);
 
-UV_EXTERN int uv_udt_bind(uv_udt_t* handle, struct sockaddr_in);
-UV_EXTERN int uv_udt_bind6(uv_udt_t* handle, struct sockaddr_in6);
-UV_EXTERN int uv_udt_getsockname(uv_udt_t* handle, struct sockaddr* name,
-    int* namelen);
-UV_EXTERN int uv_udt_getpeername(uv_udt_t* handle, struct sockaddr* name,
-    int* namelen);
+// conform to libuv v1.8
+//UV_EXTERN int uv_udt_bind(uv_udt_t* handle, struct sockaddr_in);
+UV_EXTERN int uv_udt_bind(uv_udt_t* handle, const struct sockaddr*, unsigned int flags);
+
+UV_EXTERN int uv_udt_getsockname(uv_udt_t* handle, struct sockaddr* name, int* namelen);
+
+UV_EXTERN int uv_udt_getpeername(uv_udt_t* handle, struct sockaddr* name, int* namelen);
+
 
 /* binding udt socket on existing udp socket/fd */
 UV_EXTERN int uv_udt_bindfd(uv_udt_t* handle, uv_os_sock_t udpfd);
 
+
 /*
- * uv_udt_connect, uv_udt_connect6
+ * uv_udt_connect
  * These functions establish IPv4 and IPv6 UDT connections. Provide an
  * initialized UDT handle and an uninitialized uv_connect_t*. The callback
  * will be made when the connection is established.
  */
-UV_EXTERN int uv_udt_connect(uv_connect_t* req, uv_udt_t* handle,
-    struct sockaddr_in address, uv_connect_cb cb);
-UV_EXTERN int uv_udt_connect6(uv_connect_t* req, uv_udt_t* handle,
-    struct sockaddr_in6 address, uv_connect_cb cb);
 
-UV_EXTERN int uv_udt_punchhole(uv_udt_t* handle, struct sockaddr_in address, int32_t from, int32_t to);
-UV_EXTERN int uv_udt_punchhole6(uv_udt_t* handle, struct sockaddr_in6 address, int32_t from, int32_t to);
+// conform to libuv v1.8
+//UV_EXTERN int uv_udt_connect(uv_connect_t* req, uv_udt_t* handle, struct sockaddr_in address, uv_connect_cb cb);
+//UV_EXTERN int uv_udt_connect6(uv_connect_t* req, uv_udt_t* handle, struct sockaddr_in6 address, uv_connect_cb cb);
+
+UV_EXTERN int uv_udt_connect(uv_connect_t* req, uv_udt_t* handle, const struct sockaddr* addr, uv_connect_cb cb);
+
+// conform to libuv v1.8
+//UV_EXTERN int uv_udt_punchhole(uv_udt_t* handle, struct sockaddr_in address, int32_t from, int32_t to);
+//UV_EXTERN int uv_udt_punchhole6(uv_udt_t* handle, struct sockaddr_in6 address, int32_t from, int32_t to);
+
+UV_EXTERN int uv_udt_punchhole(uv_udt_t* handle, const struct sockaddr* addr, int32_t from, int32_t to);
+
 
 /* UDT network performance track */
 typedef struct uv_netperf_
@@ -638,7 +661,7 @@ typedef struct uv_netperf_
    int pktRecvNAK;                      // number of received NAK packets
    double mbpsSendRate;                 // sending rate in Mb/s
    double mbpsRecvRate;                 // receiving rate in Mb/s
-   int64_t usSndDuration;		        // busy sending time (i.e., idle time exclusive)
+   int64_t usSndDuration;           // busy sending time (i.e., idle time exclusive)
 
    // instant measurements
    double usPktSndPeriod;               // packet sending period, in microseconds
@@ -653,6 +676,10 @@ typedef struct uv_netperf_
 
 UV_EXTERN int uv_udt_getperf(uv_udt_t* handle, uv_netperf_t* perf, int clear);
 
+
+
+
+/*
  * UDP support.
  */
 
@@ -1153,7 +1180,6 @@ typedef struct {
 UV_EXTERN int uv_getrusage(uv_rusage_t* rusage);
 
 UV_EXTERN int uv_os_homedir(char* buffer, size_t* size);
-UV_EXTERN int uv_os_tmpdir(char* buffer, size_t* size);
 
 UV_EXTERN int uv_cpu_info(uv_cpu_info_t** cpu_infos, int* count);
 UV_EXTERN void uv_free_cpu_info(uv_cpu_info_t* cpu_infos, int count);
@@ -1547,6 +1573,26 @@ union uv_any_req {
 };
 #undef XX
 
+struct uv_counters_s {
+  uint64_t async_init;
+  uint64_t check_init;
+  uint64_t eio_init;
+  uint64_t fs_event_init;
+  uint64_t fs_poll_init;
+  uint64_t handle_init;
+  uint64_t idle_init;
+  uint64_t pipe_init;
+  uint64_t poll_init;
+  uint64_t prepare_init;
+  uint64_t process_init;
+  uint64_t req_init;
+  uint64_t stream_init;
+  uint64_t tcp_init;
+  uint64_t timer_init;
+  uint64_t tty_init;
+  uint64_t udp_init;
+  uint64_t udt_init;
+};
 
 struct uv_loop_s {
   /* User data - use this for whatever. */
@@ -1555,6 +1601,10 @@ struct uv_loop_s {
   unsigned int active_handles;
   void* handle_queue[2];
   void* active_reqs[2];
+
+  /* Diagnostic counters */
+  uv_counters_t counters;
+
   /* Internal flag to signal loop stop. */
   unsigned int stop_flag;
   UV_LOOP_PRIVATE_FIELDS
@@ -1567,6 +1617,7 @@ struct uv_loop_s {
 #undef UV_REQ_PRIVATE_FIELDS
 #undef UV_STREAM_PRIVATE_FIELDS
 #undef UV_TCP_PRIVATE_FIELDS
+#undef UV_UDT_PRIVATE_FIELDS
 #undef UV_PREPARE_PRIVATE_FIELDS
 #undef UV_CHECK_PRIVATE_FIELDS
 #undef UV_IDLE_PRIVATE_FIELDS

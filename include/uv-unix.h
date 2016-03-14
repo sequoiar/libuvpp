@@ -88,6 +88,7 @@ struct uv__io_s {
   unsigned int pevents; /* Pending event mask i.e. mask at next tick. */
   unsigned int events;  /* Current event mask. */
   int fd;
+  void * pri; // place handle pointer here by tom zhou
   UV_IO_PRIVATE_PLATFORM_FIELDS
 };
 

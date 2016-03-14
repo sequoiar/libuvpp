@@ -35,7 +35,7 @@ typedef struct {
 static uv_loop_t* loop;
 
 static stream_type serverType;
-static uv_udt_t udtServer[SERVER_MAX_NUM];
+static uv_tcp_t tcpServer[SERVER_MAX_NUM];
 
 static void after_write(uv_write_t* req, int status);
 static void after_read(uv_stream_t*, ssize_t nread, uv_buf_t* buf);
@@ -125,7 +125,7 @@ static void on_close(uv_handle_t* peer) {
 
 
 
-static void echo_alloc(uv_handle_t* udt, size_t size, uv_buf_t* buf) {
+static void echo_alloc(uv_handle_t* tcp, size_t size, uv_buf_t* buf) {
     
     buf->base = malloc(size);
     buf->len = size;
@@ -147,10 +147,10 @@ static void on_connection(uv_stream_t* server, int status) {
 
   switch (serverType) {
 
-  case UDT:
-      stream = malloc(sizeof(uv_udt_t));
+  case TCP:
+      stream = malloc(sizeof(uv_tcp_t));
       ASSERT(stream != NULL);
-      r = uv_udt_init(loop, (uv_udt_t*)stream);
+      r = uv_tcp_init(loop, (uv_tcp_t*)stream);
       ASSERT(r == 0);
       break;
 
@@ -184,30 +184,30 @@ static void on_server_close(uv_handle_t* handle) {
 }
 
 
-static int udt4_echo_start(int port) {
+static int tcp4_echo_start(int port) {
 	struct sockaddr_in addr;
 	int r;
 	int i;
 
-	serverType = UDT;
-	for (i = 0; i < (sizeof(udtServer) / sizeof(udtServer[0])); i ++) {
+	serverType = TCP;
+	for (i = 0; i < (sizeof(tcpServer) / sizeof(tcpServer[0])); i ++) {
 		 uv_ip4_addr("0.0.0.0", port+i, &addr);
 
-		r = uv_udt_init(loop, &udtServer[i]);
+		r = uv_tcp_init(loop, &tcpServer[i]);
 		if (r < 0) {
 			/* TODO: Error codes */
 			fprintf(stderr, "Socket creation error\n");
 			return 1;
 		}
 
-		r = uv_udt_bind(&udtServer[i], &addr, 0);
+		r = uv_tcp_bind(&tcpServer[i], &addr, 0);
 		if (r < 0) {
 			/* TODO: Error codes */
 			fprintf(stderr, "Bind error\n");
 			return 1;
 		}
         
-		r = uv_listen((uv_stream_t*)&udtServer[i], SOMAXCONN, on_connection);
+		r = uv_listen((uv_stream_t*)&tcpServer[i], SOMAXCONN, on_connection);
 
         if (r < 0) {
             fprintf(stderr, "Listen error %s\n", uv_strerror(r));
@@ -222,17 +222,17 @@ static int udt4_echo_start(int port) {
 int main(int argc, char * argv [])
 {
     
-    printf("echo-server-udt start\n");
+    printf("echo-server-tcp start\n");
 	loop = uv_default_loop();
 
 	if (argc == 2) {
-		if (udt4_echo_start(atoi(argv[1])))
+		if (tcp4_echo_start(atoi(argv[1])))
 			return 1;
 	} else {
-		if (udt4_echo_start(TEST_PORT))
+		if (tcp4_echo_start(TEST_PORT))
 			return 1;
 	}
 
-	uv_run(loop, UV_RUN_DEFAULT);
+	uv_run(loop, UV_RUN_ONCE);
 	return 0;
 }

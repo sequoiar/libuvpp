@@ -489,6 +489,315 @@
       },
     },
 
+
+
+  {
+      'target_name': 'echo-server-udt',
+      'type': 'executable',
+      'dependencies': [ 'libuv' ],
+      'include_dirs': [
+        'include',
+        'src',
+        'src/UDT4/src',
+        'src/nacl'        
+      ],
+          'cflags': [
+            '-g',
+            '--std=gnu89',
+            '-pedantic',
+            '-Wall',
+            '-Wextra',
+            '-Wno-unused-parameter',
+          ],
+      'sources': [
+        'test/echo-server-udt.c',
+        'test/runner.h',
+        'test/task.h',
+    ],
+      'conditions': [
+        [ 'OS=="win"', {
+          'sources': [
+            'test/runner-win.h',
+          ],
+          'libraries': [ 'ws2_32.lib', 'wsock32.lib' ]
+        }, 
+        { # Not Windows i.e. POSIX
+          'defines': [ '_GNU_SOURCE', 'EVPIPE_OSFD'],
+          'cflags': [
+            '-g',
+            '--std=gnu89',
+            '-pedantic',
+            '-Wall',
+            '-Wextra',
+            '-DEVPIPE_OSFD',
+            '-Wno-unused-parameter',
+          ],
+          'sources': [
+            'test/runner-unix.h'
+          ],
+          'link_settings': {
+            'conditions': [
+              ['OS=="solaris"', {
+                'ldflags': [ '-pthreads' ],
+              }],
+              ['OS != "solaris" and OS != "android"', {
+                'ldflags': [ '-pthread' ],
+              }],
+            ],
+          },
+          'conditions': [
+            ['uv_library=="shared_library"', {
+              'cflags': [ '-fPIC' ],
+            }],
+            ['uv_library=="shared_library" and OS!="mac"', {
+              # This will cause gyp to set soname
+              # Must correspond with UV_VERSION_MAJOR
+              # in include/uv-version.h
+              'product_extension': 'so.1',
+            }],
+          ],
+        }]
+      ],
+      'msvs-settings': {
+        'VCLinkerTool': {
+          'SubSystem': 1, # /subsystem:console
+        },
+      },
+      'xcode_settings': {
+        'WARNING_CFLAGS': [ '-Wall', '-Wextra', '-Wno-unused-parameter' ],
+        'OTHER_CFLAGS': [ '-g',  '-pedantic' ]
+      }
+    },
+  {
+      'target_name': 'echo-client-udt',
+      'type': 'executable',
+      'dependencies': [ 'libuv' ],
+      'include_dirs': [
+        'include',
+        'src',
+        'src/UDT4/src',
+        'src/nacl'        
+      ],
+          'cflags': [
+            '-g',
+            '--std=gnu89',
+            '-pedantic',
+            '-Wall',
+            '-Wextra',
+            '-Wno-unused-parameter',
+          ],
+      'sources': [
+        'test/echo-client-udt.c',
+        'test/runner.h',
+        'test/task.h',
+    ],
+      'conditions': [
+        [ 'OS=="win"', {
+          'sources': [
+            'test/runner-win.h',
+          ],
+          'libraries': [ 'ws2_32.lib', 'wsock32.lib' ]
+        }, 
+        { # Not Windows i.e. POSIX
+          'defines': [ '_GNU_SOURCE', 'EVPIPE_OSFD'],
+          'cflags': [
+            '-g',
+            '--std=gnu89',
+            '-pedantic',
+            '-Wall',
+            '-Wextra',
+            '-DEVPIPE_OSFD',
+            '-Wno-unused-parameter',
+          ],
+          'sources': [
+            'test/runner-unix.h'
+          ],
+          'link_settings': {
+            'conditions': [
+              ['OS=="solaris"', {
+                'ldflags': [ '-pthreads' ],
+              }],
+              ['OS != "solaris" and OS != "android"', {
+                'ldflags': [ '-pthread' ],
+              }],
+            ],
+          },
+          'conditions': [
+            ['uv_library=="shared_library"', {
+              'cflags': [ '-fPIC' ],
+            }],
+            ['uv_library=="shared_library" and OS!="mac"', {
+              # This will cause gyp to set soname
+              # Must correspond with UV_VERSION_MAJOR
+              # in include/uv-version.h
+              'product_extension': 'so.1',
+            }],
+          ],
+        }]
+      ],
+      'msvs-settings': {
+        'VCLinkerTool': {
+          'SubSystem': 1, # /subsystem:console
+        },
+      },
+      'xcode_settings': {
+        'WARNING_CFLAGS': [ '-Wall', '-Wextra', '-Wno-unused-parameter' ],
+        'OTHER_CFLAGS': [ '-g',  '-pedantic' ]
+      }
+    },
+
+  {
+      'target_name': 'echo-server-tcp',
+      'type': 'executable',
+      'dependencies': [ 'libuv' ],
+      'include_dirs': [
+        'include',
+        'src',
+        'src/UDT4/src',
+        'src/nacl'        
+      ],
+          'cflags': [
+            '-g',
+            '--std=gnu89',
+            '-pedantic',
+            '-Wall',
+            '-Wextra',
+            '-Wno-unused-parameter',
+          ],
+      'sources': [
+        'test/echo-server-tcp.c',
+        'test/runner.h',
+        'test/task.h',
+    ],
+      'conditions': [
+        [ 'OS=="win"', {
+          'sources': [
+            'test/runner-win.h',
+          ],
+          'libraries': [ 'ws2_32.lib', 'wsock32.lib' ]
+        }, 
+        { # Not Windows i.e. POSIX
+          'defines': [ '_GNU_SOURCE', 'EVPIPE_OSFD'],
+          'cflags': [
+            '-g',
+            '--std=gnu89',
+            '-pedantic',
+            '-Wall',
+            '-Wextra',
+            '-DEVPIPE_OSFD',
+            '-Wno-unused-parameter',
+          ],
+          'sources': [
+            'test/runner-unix.h'
+          ],
+          'link_settings': {
+            'conditions': [
+              ['OS=="solaris"', {
+                'ldflags': [ '-pthreads' ],
+              }],
+              ['OS != "solaris" and OS != "android"', {
+                'ldflags': [ '-pthread' ],
+              }],
+            ],
+          },
+          'conditions': [
+            ['uv_library=="shared_library"', {
+              'cflags': [ '-fPIC' ],
+            }],
+            ['uv_library=="shared_library" and OS!="mac"', {
+              # This will cause gyp to set soname
+              # Must correspond with UV_VERSION_MAJOR
+              # in include/uv-version.h
+              'product_extension': 'so.1',
+            }],
+          ],
+        }]
+      ],
+      'msvs-settings': {
+        'VCLinkerTool': {
+          'SubSystem': 1, # /subsystem:console
+        },
+      },
+      'xcode_settings': {
+        'WARNING_CFLAGS': [ '-Wall', '-Wextra', '-Wno-unused-parameter' ],
+        'OTHER_CFLAGS': [ '-g',  '-pedantic' ]
+      }
+    },
+
+
+  {
+      'target_name': 'echo-client-tcp',
+      'type': 'executable',
+      'dependencies': [ 'libuv' ],
+      'include_dirs': [
+        'include',
+        'src',
+        'src/UDT4/src',
+        'src/nacl'        
+      ],
+          'cflags': [
+            '-g',
+            '--std=gnu89',
+            '-pedantic',
+            '-Wall',
+            '-Wextra',
+            '-DEVPIPE_OSFD',
+            '-Wno-unused-parameter',
+          ],
+      'sources': [
+        'test/echo-client-tcp.c',
+        'test/runner.h',
+        'test/task.h',
+    ],
+      'conditions': [
+        [ 'OS=="win"', {
+          'sources': [
+            'test/runner-win.h',
+          ],
+          'libraries': [ 'ws2_32.lib', 'wsock32.lib' ]
+        }, 
+        { # Not Windows i.e. POSIX
+          'defines': [ '_GNU_SOURCE', 'EVPIPE_OSFD'],
+          'cflags': [
+            
+            '-Wno-unused-parameter'
+          ],
+          'sources': [
+            'test/runner-unix.h'
+          ],
+          'link_settings': {
+            'conditions': [
+              ['OS=="solaris"', {
+                'ldflags': [ '-pthreads' ],
+              }],
+              ['OS != "solaris" and OS != "android"', {
+                'ldflags': [ '-pthread' ],
+              }],
+            ],
+          },
+          'conditions': [
+            ['uv_library=="shared_library"', {
+              'cflags': [ '-fPIC' ],
+            }],
+            ['uv_library=="shared_library" and OS!="mac"', {
+              # This will cause gyp to set soname
+              # Must correspond with UV_VERSION_MAJOR
+              # in include/uv-version.h
+              'product_extension': 'so.1',
+            }],
+          ],
+        }]
+      ],
+      'msvs-settings': {
+        'VCLinkerTool': {
+          'SubSystem': 1, # /subsystem:console
+        },
+      },
+      'xcode_settings': {
+        'WARNING_CFLAGS': [ '-Wall', '-Wextra', '-Wno-unused-parameter' ]
+      }
+    },
+
     {
       'target_name': 'run-benchmarks',
       'type': 'executable',

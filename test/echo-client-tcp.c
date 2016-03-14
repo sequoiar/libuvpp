@@ -36,7 +36,7 @@
 typedef struct {
   int pongs;
   int state;
-  uv_udt_t udt;
+  uv_tcp_t tcp;
   uv_connect_t connect_req;
   uv_shutdown_t shutdown_req;
 } pinger_t;
@@ -58,15 +58,29 @@ static int64_t start_time;
 
 
 
-static void buf_alloc(uv_handle_t* udt, size_t size, uv_buf_t* buf) {
+static uv_buf_t buf_alloc(uv_handle_t* tcp, size_t size) {
+  buf_t* ab;
 
-    buf->base = malloc(size);
-    buf->len = size;
+  ab = buf_freelist;
+
+  if (ab != NULL) {
+    buf_freelist = ab->next;
+    return ab->uv_buf_t;
+  }
+
+  ab = (buf_t*) malloc(size + sizeof *ab);
+  ab->uv_buf_t.len = size;
+  ab->uv_buf_t.base = ((char*) ab) + sizeof *ab;
+
+  return ab->uv_buf_t;
 }
 
 
-static void buf_free(uv_buf_t* buf) {
-    free(buf->base);
+static void buf_free(uv_buf_t buf) {
+  buf_t* ab = (buf_t*) (buf.base - sizeof *ab);
+
+  ab->next = buf_freelist;
+  buf_freelist = ab;
 }
 
 
@@ -84,7 +98,7 @@ static void pinger_close_cb(uv_handle_t* handle) {
 
 static void pinger_write_cb(uv_write_t* req, int status) {
   ASSERT(status == 0);
-    //printf("pinger_write_cb");
+    printf("pinger_write_cb");
   free(req);
 }
 
@@ -97,7 +111,7 @@ static void pinger_write_ping(pinger_t* pinger) {
   buf.len = strlen(PING);
 
   req = malloc(sizeof *req);
-  if (uv_write(req, (uv_stream_t*) &pinger->udt, &buf, 1, pinger_write_cb)) {
+  if (uv_write(req, (uv_stream_t*) &pinger->tcp, &buf, 1, pinger_write_cb)) {
     FATAL("uv_write failed");
   }
 }
@@ -114,36 +128,36 @@ static void pinger_shutdown_cb(uv_shutdown_t* req, int status) {
 }
 
 
-static void pinger_read_cb(uv_stream_t* udt, ssize_t nread, const uv_buf_t* buf) {
+static void pinger_read_cb(uv_stream_t* tcp, ssize_t nread, uv_buf_t buf) {
   ssize_t i;
   pinger_t* pinger;
 
-  //printf("%s.%d,pinger_read_cb,udtfd@%d\n", __FUNCTION__, __LINE__, ((uv_udt_t*)udt)->udtfd);
+  printf("%s.%d,pinger_read_cb,tcpfd@%d\n", __FUNCTION__, __LINE__, ((uv_tcp_t*)tcp)->u.fd);
 
-  pinger = (pinger_t*)udt->data;
+  pinger = (pinger_t*)tcp->data;
 
   if (nread < 0) {
-    ///printf("%s.%d,pinger_read_cb,udtfd@%d\n", __FUNCTION__, __LINE__, ((uv_udt_t*)udt)->udtfd);
+
     ///ASSERT(uv_last_error(loop).code == UV_EOF);
 
-    if (buf->base) {
+    if (buf.base) {
       buf_free(buf);
     }
 
     ///ASSERT(pinger_shutdown_cb_called == 1);
-    uv_close((uv_handle_t*)udt, pinger_close_cb);
+    uv_close((uv_handle_t*)tcp, pinger_close_cb);
 
     return;
   }
 
 
   for (i = 0; i < nread; i++) {
-    ASSERT(buf->base[i] == PING[pinger->state]);
+    ASSERT(buf.base[i] == PING[pinger->state]);
     pinger->state = (pinger->state + 1) % (sizeof(PING) - 1);
     if (pinger->state == 0) {
       pinger->pongs++;
       if (uv_now(loop) - start_time > TIME) {
-        uv_shutdown(&pinger->shutdown_req, (uv_stream_t*) udt, pinger_shutdown_cb);
+        uv_shutdown(&pinger->shutdown_req, (uv_stream_t*) tcp, pinger_shutdown_cb);
         break;
       } else {
         pinger_write_ping(pinger);
@@ -158,7 +172,11 @@ static void pinger_read_cb(uv_stream_t* udt, ssize_t nread, const uv_buf_t* buf)
 static void pinger_connect_cb(uv_connect_t* req, int status) {
   pinger_t *pinger = (pinger_t*)req->handle->data;
 
-  //printf("pinger_connect_cb\n");
+  
+    
+  const char* err_name = uv_err_name(status);
+    
+  printf("err_name:%s\n", err_name);
   ASSERT(status == 0);
 
   pinger_write_ping(pinger);
@@ -187,14 +205,14 @@ static void pinger_new(int port) {
 
     
   
-  r = uv_udt_init(loop, &pinger->udt);
+  r = uv_tcp_init(loop, &pinger->tcp);
   ASSERT(!r);
 
-  pinger->udt.data = pinger;
+  pinger->tcp.data = pinger;
 
-  uv_udt_bind(&pinger->udt, &client_addr, 0);
+  uv_tcp_bind(&pinger->tcp, &client_addr, 0);
 
-  r = uv_udt_connect(&pinger->connect_req, &pinger->udt, &server_addr, pinger_connect_cb);
+  r = uv_tcp_connect(&pinger->connect_req, &pinger->tcp, &server_addr, pinger_connect_cb);
   ASSERT(!r);
     
 }
@@ -202,7 +220,7 @@ static void pinger_new(int port) {
 
 int main(int argc, char * argv [])
 {
-    printf("echo-client-udt start \n");
+    printf("echo-client-tcp start\n");
     
     int srvNum=1;
 	int clnNum=1;
@@ -230,7 +248,7 @@ int main(int argc, char * argv [])
 		for (j = 0; j < clnNum; j++)
 		    pinger_new(port+i);
 
-	uv_run(loop, UV_RUN_DEFAULT);
+	uv_run(loop, UV_RUN_ONCE);
 
 	ASSERT(completed_pingers == 1);
 
