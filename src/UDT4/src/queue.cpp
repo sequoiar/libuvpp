@@ -844,6 +844,7 @@ void CRendezvousQueue::updateConnStatus()
       // avoid sending too many requests, at most 1 request per 250ms
       if (CTimer::getTime() - i->m_pUDT->m_llLastReqTime > 250000)
       {
+          //printf("CTimer::getTime() - i->m_ullTTL:%li", (long)(CTimer::getTime() - i->m_ullTTL));
          if (CTimer::getTime() >= i->m_ullTTL)
          {
             // connection timer expired, acknowledge app via epoll
@@ -852,7 +853,9 @@ void CRendezvousQueue::updateConnStatus()
 
 #ifdef EVPIPE_OSFD
             // trigger event pipe
-            i->m_pUDT->feedOsfd();
+             ///printf("%s.%s.%d, trigger Listened...", __FILE__, __FUNCTION__, __LINE__);
+             i->m_pUDT->feedOsfd();
+             ///printf("done\n");
 #endif
             continue;
          }

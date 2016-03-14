@@ -18,7 +18,7 @@
     ],
     'xcode_settings': {
       'WARNING_CFLAGS': [ '-Wall', '-Wextra', '-Wno-unused-parameter' ],
-      'OTHER_CFLAGS': [ '-g', '--std=gnu89', '-pedantic' ],
+      'OTHER_CFLAGS': [ '-g',  '-pedantic' ]
     }
   },
 
@@ -28,9 +28,9 @@
       'type': '<(uv_library)',
       'include_dirs': [
         'include',
-        'src/',
-        'src/UDT4/src/',
-        'src/nacl/',
+        'src',
+        'src/UDT4/src',
+        'src/nacl'        
       ],
       'direct_dependent_settings': {
         'include_dirs': [ 'include' ],

@@ -23,6 +23,7 @@
 #include "internal.h"
 #include "udtc.h"
 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,17 +41,6 @@
 # include <sys/event.h>
 # include <sys/time.h>
 # include <sys/select.h>
-
-// consume UDT Os fd event
-static void udt_consume_osfd(int os_fd)
-{
-	int saved_errno = errno;
-	char dummy;
-
-	recv(os_fd, &dummy, sizeof(dummy), 0);
-
-	errno = saved_errno;
-}
 
 /* Forward declaration */
 typedef struct uv__stream_select_s uv__stream_select_t;
@@ -78,6 +68,19 @@ static void uv__read(uv_stream_t* stream);
 static void uv__stream_io(uv_loop_t* loop, uv__io_t* w, unsigned int events);
 static void uv__write_callbacks(uv_stream_t* stream);
 static size_t uv__write_req_size(uv_write_t* req);
+
+// consume UDT Os fd event
+static void udt_consume_osfd(int os_fd)
+{
+    int saved_errno = errno;
+    char dummy;
+    
+    recv(os_fd, &dummy, sizeof(dummy), 0);
+    //
+    errno = saved_errno;
+}
+
+
 
 
 void uv__stream_init(uv_loop_t* loop,
@@ -115,6 +118,9 @@ void uv__stream_init(uv_loop_t* loop,
 #endif /* defined(__APPLE_) */
 
   uv__io_init(&stream->io_watcher, uv__stream_io, -1);
+    
+    // hook stream handle
+    stream->io_watcher.pri = stream;
 }
 
 
@@ -429,6 +435,18 @@ int uv__stream_open(uv_stream_t* stream, int fd, int flags) {
 
   stream->io_watcher.fd = fd;
 
+    /* Associate the fd with each watcher. */
+    if (stream->type == UV_UDT) {
+
+        
+        stream->io_watcher.fd = fd;
+        //stream->io_watcher.events = stream->io_watcher.events | UV__POLLIN;
+        stream->io_watcher.events = 0;
+        stream->io_watcher.cb = uv__stream_io;
+    }
+    
+    
+    
   return 0;
 }
 
@@ -519,14 +537,25 @@ static int uv__emfile_trick(uv_loop_t* loop, int accept_fd) {
 
 
 void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
+  int udtfd, optlen;
   uv_stream_t* stream;
   int err;
 
-  stream = container_of(w, uv_stream_t, io_watcher);
+  ///printf("%s.%d\n", __FUNCTION__, __LINE__);
+
+  //stream = container_of(w, uv_stream_t, io_watcher);
+    
+  stream = (uv_stream_t*)(w->pri);
+  
+    
   assert(events == UV__POLLIN);
   assert(stream->accepted_fd == -1);
   assert(!(stream->flags & UV_CLOSING));
 
+    if ((stream->type == UV_UDT) && (stream->io_watcher.fd != -1)) {
+        udt_consume_osfd(stream->io_watcher.fd);
+    }
+    
   uv__io_start(stream->loop, &stream->io_watcher, UV__POLLIN);
 
   /* connection_cb can close the server socket while we're
@@ -535,6 +564,44 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
   while (uv__stream_fd(stream) != -1) {
     assert(stream->accepted_fd == -1);
 
+      
+      if (stream->type == UV_UDT) {
+          udtfd = udt__accept(((uv_udt_t *)stream)->udtfd);
+          
+          if (udtfd < 0) {
+              ///fprintf(stdout, "func:%s, line:%d, errno: %d, %s\n", __FUNCTION__, __LINE__, udt_getlasterror_code(), udt_getlasterror_desc());
+              
+              if (udt_getlasterror_code() == UDT_EASYNCRCV /*errno == EAGAIN || errno == EWOULDBLOCK*/) {
+                  /* No problem. */
+                  errno = EAGAIN;
+                  return;
+              } else if (udt_getlasterror_code() == UDT_ESECFAIL /*errno == ECONNABORTED*/) {
+                  /* ignore */
+                  errno = ECONNABORTED;
+                  continue;
+              } else {
+                  //uv__set_sys_error(stream->loop, uv_translate_udt_error());
+                  stream->connection_cb((uv_stream_t*)stream, -errno);
+              }
+          } else {
+              ((uv_udt_t *)stream)->accepted_udtfd = udtfd;
+              // fill Os fd
+              assert(udt_getsockopt(udtfd, 0, (int)UDT_UDT_OSFD, &stream->accepted_fd, &optlen) == 0);
+              
+              stream->connection_cb((uv_stream_t*)stream, 0);
+              if (stream->accepted_fd >= 0) {
+                  /* The user hasn't yet accepted called uv_accept() */
+                  uv__io_stop(stream->loop, &stream->io_watcher, UV__POLLIN);
+                  return;
+              }
+          }
+      } else {
+      
+      
+      
+      
+      
+      
 #if defined(UV_HAVE_KQUEUE)
     if (w->rcount <= 0)
       return;
@@ -574,6 +641,7 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
       nanosleep(&timeout, NULL);
     }
   }
+  }
 }
 
 
@@ -582,22 +650,42 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
 
 int uv_accept(uv_stream_t* server, uv_stream_t* client) {
   int err;
-
+    uv_stream_t* streamServer;
+    uv_stream_t* streamClient;
   /* TODO document this */
   assert(server->loop == client->loop);
 
   if (server->accepted_fd == -1)
     return -EAGAIN;
-
+    
+    
+  streamServer = (uv_stream_t*)server;
+  streamClient = (uv_stream_t*)client;
+  if (streamServer->type == UV_UDT) {
+    ((uv_udt_t *)streamClient)->udtfd = ((uv_udt_t *)streamServer)->accepted_udtfd;
+  }
+    
+    
   switch (client->type) {
     case UV_NAMED_PIPE:
     case UV_TCP:
+    case UV_UDT:
       err = uv__stream_open(client,
                             server->accepted_fd,
                             UV_STREAM_READABLE | UV_STREAM_WRITABLE);
+          
+          
       if (err) {
         /* TODO handle error */
-        uv__close(server->accepted_fd);
+          if (streamServer->type == UV_UDT) {
+              // clear pending Os fd event
+              udt_consume_osfd(((uv_udt_t *)streamServer)->accepted_fd);
+              
+              udt_close(((uv_udt_t *)streamServer)->accepted_udtfd);
+          }else{
+              uv__close(server->accepted_fd);
+          }
+        streamServer->accepted_fd = -1;
         goto done;
       }
       break;
@@ -651,7 +739,9 @@ int uv_listen(uv_stream_t* stream, int backlog, uv_connection_cb cb) {
   case UV_TCP:
     err = uv_tcp_listen((uv_tcp_t*)stream, backlog, cb);
     break;
-
+  case UV_UDT:
+    err = uv_udt_listen((uv_udt_t*)stream, backlog, cb);
+    break;
   case UV_NAMED_PIPE:
     err = uv_pipe_listen((uv_pipe_t*)stream, backlog, cb);
     break;
@@ -687,14 +777,34 @@ static void uv__drain(uv_stream_t* stream) {
     uv__req_unregister(stream->loop, req);
 
     err = 0;
-    if (shutdown(uv__stream_fd(stream), SHUT_WR))
-      err = -errno;
 
-    if (err == 0)
-      stream->flags |= UV_STREAM_SHUT;
+    // UDT don't need drain
+    if (stream->type == UV_UDT) {
+      if (udt_close(((uv_udt_t *)stream)->udtfd)) {
+        /* Error. Report it. User should call uv_close(). */
+        errno = uv_translate_udt_error();
+        if (req->cb) {
+          req->cb(req, -errno);
+        }
+      } else {
+        
+        ((uv_handle_t*) stream)->flags |= UV_STREAM_SHUT;
+        if (req->cb) {
+          req->cb(req, 0);
+        }
+      }
 
-    if (req->cb != NULL)
-      req->cb(req, err);
+    }else{
+      if (shutdown(uv__stream_fd(stream), SHUT_WR))
+        err = -errno;
+
+      if (err == 0)
+        stream->flags |= UV_STREAM_SHUT;
+
+      if (req->cb != NULL)
+        req->cb(req, err);
+      }
+
   }
 }
 
@@ -733,6 +843,8 @@ static void uv__write_req_finish(uv_write_t* req) {
    * callback called in the near future.
    */
   QUEUE_INSERT_TAIL(&stream->write_completed_queue, &req->queue);
+
+
   uv__io_feed(stream->loop, &stream->io_watcher);
 }
 
@@ -833,6 +945,28 @@ start:
     while (n == -1 && errno == EINTR);
 #endif
   } else {
+      
+      if (stream->type == UV_UDT) {
+          int next = 1, it = 0;
+          n = -1;
+          for (it = 0; it < iovcnt; it ++) {
+              size_t ilen = 0;
+              while (ilen < iov[it].iov_len) {
+                  int rc = udt_send(((uv_udt_t *)stream)->udtfd, ((char *)iov[it].iov_base)+ilen, iov[it].iov_len-ilen, 0);
+                  if (rc < 0) {
+                      next = 0;
+                      break;
+                  } else  {
+                      if (n == -1) n = 0;
+                      n += rc;
+                      ilen += rc;
+                  }
+              }
+              if (next == 0) break;
+          }
+      } else {
+
+      
     do {
       if (iovcnt == 1) {
         n = write(uv__stream_fd(stream), iov[0].iov_base, iov[0].iov_len);
@@ -851,22 +985,41 @@ start:
 #else
     while (n == -1 && errno == EINTR);
 #endif
-  }
-
+  } //if (stream->type == UV_UDT) {
+  } //if (req->send_handle) {
   if (n < 0) {
-    if (errno != EAGAIN && errno != EWOULDBLOCK) {
-      /* Error */
-      req->error = -errno;
-      uv__write_req_finish(req);
-      uv__io_stop(stream->loop, &stream->io_watcher, UV__POLLOUT);
-      if (!uv__io_active(&stream->io_watcher, UV__POLLIN))
-        uv__handle_stop(stream);
-      uv__stream_osx_interrupt_select(stream);
-      return;
-    } else if (stream->flags & UV_STREAM_BLOCKING) {
-      /* If this is a blocking stream, try again. */
-      goto start;
-    }
+      if (stream->type == UV_UDT) {
+          //static int wcnt = 0;
+          //fprintf(stdout, "func:%s, line:%d, rcnt: %d\n", __FUNCTION__, __LINE__, wcnt ++);
+          
+          if (udt_getlasterror_code() != UDT_EASYNCSND) {
+              /* Error */
+              req->error = uv_translate_udt_error();
+              stream->write_queue_size -= uv__write_req_size(req);
+              uv__write_req_finish(req);
+              return;
+          } else if (stream->flags & UV_STREAM_BLOCKING) {
+              /* If this is a blocking stream, try again. */
+              goto start;
+          }
+      } else {
+          if (errno != EAGAIN && errno != EWOULDBLOCK) {
+              /* Error */
+              req->error = -errno;
+              uv__write_req_finish(req);
+              uv__io_stop(stream->loop, &stream->io_watcher, UV__POLLOUT);
+              if (!uv__io_active(&stream->io_watcher, UV__POLLIN))
+                  uv__handle_stop(stream);
+              uv__stream_osx_interrupt_select(stream);
+              return;
+          } else if (stream->flags & UV_STREAM_BLOCKING) {
+              /* If this is a blocking stream, try again. */
+              goto start;
+          }
+      
+      }
+      
+
   } else {
     /* Successful write */
 
@@ -1129,12 +1282,14 @@ static void uv__read(uv_stream_t* stream) {
   /* XXX: Maybe instead of having UV_STREAM_READING we just test if
    * tcp->read_cb is NULL or not?
    */
+    
   while (stream->read_cb
       && (stream->flags & UV_STREAM_READING)
       && (count-- > 0)) {
     assert(stream->alloc_cb != NULL);
 
     stream->alloc_cb((uv_handle_t*)stream, 64 * 1024, &buf);
+
     if (buf.len == 0) {
       /* User indicates it can't or won't handle the read. */
       stream->read_cb(stream, UV_ENOBUFS, &buf);
@@ -1143,7 +1298,102 @@ static void uv__read(uv_stream_t* stream) {
 
     assert(buf.base != NULL);
     assert(uv__stream_fd(stream) >= 0);
-
+      
+    assert(buf.len > 0);
+      
+      // udt recv
+      if (stream->type == UV_UDT) {
+          if (stream->read_cb) {
+              nread = udt_recv(((uv_udt_t *)stream)->udtfd, buf.base, buf.len, 0);
+              if (nread <= 0) {
+                  // consume Os fd event
+                  ///udt_consume_osfd(stream->fd);
+              }
+              ///fprintf(stdout, "func:%s, line:%d, expect rd: %d, real rd: %d\n", __FUNCTION__, __LINE__, buf.len, nread);
+          } else {
+              // never support recvmsg on udt for now
+              assert(0);
+          }
+          
+          if (nread < 0) {
+              /* Error */
+              int udterr = uv_translate_udt_error();
+              
+              if (udterr == EAGAIN) {
+                  /* Wait for the next one. */
+                  if (stream->flags & UV_STREAM_READING) {
+                      uv__io_start(stream->loop, &stream->io_watcher, UV__POLLIN);
+                      uv__stream_osx_interrupt_select(stream);
+                  }
+                  //uv__set_sys_error(stream->loop, EAGAIN);
+                  
+                  if (stream->read_cb) {
+                      stream->read_cb(stream, 0, &buf);
+                  } else {
+                      // never go here
+                      assert(0);
+                  }
+                  
+                  return;
+              } else if ((udterr == EPIPE) || (udterr == ENOTSOCK)) {
+                  // socket broken or invalid socket as EOF
+                  errno = UV_EOF;
+                  /* EOF */
+                  //uv__set_artificial_error(stream->loop, UV_EOF);
+                  uv__io_stop(stream->loop, &stream->io_watcher, UV__POLLIN);
+                  if (!uv__io_active(&stream->io_watcher, UV__POLLOUT))
+                      uv__handle_stop(stream);
+                  uv__stream_osx_interrupt_select(stream);
+                  if (stream->read_cb) {
+                      stream->read_cb(stream, -errno, &buf);
+                  } else {
+                      // never come here
+                      assert(0);
+                  }
+                  return;
+              } else {
+                  /* Error. User should call uv_close(). */
+                  //uv__set_sys_error(stream->loop, udterr);
+                  errno = udterr;
+                  uv__io_stop(stream->loop, &stream->io_watcher, UV__POLLIN);
+                  if (!uv__io_active(&stream->io_watcher, UV__POLLOUT))
+                      uv__handle_stop(stream);
+                  uv__stream_osx_interrupt_select(stream);
+                  
+                  if (stream->read_cb) {
+                      stream->read_cb(stream, -errno, &buf);
+                  } else {
+                      // never come here
+                      assert(0);
+                  }
+                  
+                  //assert(!uv__io_active(&stream->read_watcher));
+                  return;
+              }
+              
+          } else if (nread == 0) {
+              // never go here
+              assert(0);
+              return;
+          } else {
+              /* Successful read */
+              ssize_t buflen = buf.len;
+              
+              if (stream->read_cb) {
+                  stream->read_cb(stream, nread, &buf);
+              } else {
+                  // never support recvmsg on udt for now
+                  assert(0);
+              }
+              
+              /* Return if we didn't fill the buffer, there is no more data to read. */
+              if (nread < buflen) {
+                  stream->flags |= UV_STREAM_READ_PARTIAL;
+                  return;
+              }
+          }
+      } else {
+      
     if (!is_ipc) {
       do {
         nread = read(uv__stream_fd(stream), buf.base, buf.len);
@@ -1209,9 +1459,9 @@ static void uv__read(uv_stream_t* stream) {
         return;
       }
     }
+    }
   }
 }
-
 
 #ifdef __clang__
 # pragma clang diagnostic pop
@@ -1222,7 +1472,7 @@ static void uv__read(uv_stream_t* stream) {
 
 
 int uv_shutdown(uv_shutdown_t* req, uv_stream_t* stream, uv_shutdown_cb cb) {
-  assert((stream->type == UV_TCP || stream->type == UV_NAMED_PIPE) &&
+  assert((stream->type == UV_TCP || stream->type == UV_UDT || stream->type == UV_NAMED_PIPE) &&
          "uv_shutdown (unix) only supports uv_handle_t right now");
 
   if (!(stream->flags & UV_STREAM_WRITABLE) ||
@@ -1249,19 +1499,34 @@ int uv_shutdown(uv_shutdown_t* req, uv_stream_t* stream, uv_shutdown_cb cb) {
 }
 
 
+
 static void uv__stream_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
-  uv_stream_t* stream;
-
+  //uv_stream_t* stream;
+    uv_stream_t* stream = (uv_stream_t*)(w->pri);
+    
+    //printf("uv__stream_io \n");
+    
+    
+#if 0
   stream = container_of(w, uv_stream_t, io_watcher);
-
+#endif
+    
   assert(stream->type == UV_TCP ||
+         stream->type == UV_UDT ||
          stream->type == UV_NAMED_PIPE ||
          stream->type == UV_TTY);
   assert(!(stream->flags & UV_CLOSING));
 
+    if ((stream->type == UV_UDT) && (stream->io_watcher.fd >= 0)) {
+        udt_consume_osfd(stream->io_watcher.fd);
+    }
+    
+    
   if (stream->connect_req) {
     uv__stream_connect(stream);
     return;
+  } else {
+      
   }
 
   assert(uv__stream_fd(stream) >= 0);
@@ -1311,7 +1576,7 @@ static void uv__stream_connect(uv_stream_t* stream) {
   uv_connect_t* req = stream->connect_req;
   socklen_t errorsize = sizeof(int);
 
-  assert(stream->type == UV_TCP || stream->type == UV_NAMED_PIPE);
+  assert(stream->type == UV_TCP || stream->type == UV_UDT ||stream->type == UV_NAMED_PIPE);
   assert(req);
 
   if (stream->delayed_error) {
@@ -1324,11 +1589,32 @@ static void uv__stream_connect(uv_stream_t* stream) {
   } else {
     /* Normal situation: we need to get the socket error from the kernel. */
     assert(uv__stream_fd(stream) >= 0);
-    getsockopt(uv__stream_fd(stream),
+
+    if (stream->type == UV_UDT) {
+      // notes: check socket state until connect successfully
+      switch (udt_getsockstate(((uv_udt_t *)stream)->udtfd)) {
+      case UDT_CONNECTED:
+        error = 0;
+        // consume Os fd event
+        ///udt_consume_osfd(stream->fd);
+        break;
+      case UDT_CONNECTING:
+        error = EINPROGRESS;
+        break;
+      default:
+        error = uv_translate_udt_error();
+        // consume Os fd event
+        ///udt_consume_osfd(stream->fd);
+        break;
+      }
+    } else {
+        getsockopt(uv__stream_fd(stream),
                SOL_SOCKET,
                SO_ERROR,
                &error,
                &errorsize);
+    }
+
     error = -error;
   }
 
@@ -1365,6 +1651,7 @@ int uv_write2(uv_write_t* req,
 
   assert(nbufs > 0);
   assert((stream->type == UV_TCP ||
+          stream->type == UV_UDT ||
           stream->type == UV_NAMED_PIPE ||
           stream->type == UV_TTY) &&
          "uv_write (unix) does not yet support other types of streams");
@@ -1511,7 +1798,7 @@ int uv_try_write(uv_stream_t* stream,
 int uv_read_start(uv_stream_t* stream,
                   uv_alloc_cb alloc_cb,
                   uv_read_cb read_cb) {
-  assert(stream->type == UV_TCP || stream->type == UV_NAMED_PIPE ||
+  assert(stream->type == UV_TCP || stream->type == UV_UDT || stream->type == UV_NAMED_PIPE ||
       stream->type == UV_TTY);
 
   if (stream->flags & UV_CLOSING)
@@ -1571,6 +1858,7 @@ int uv___stream_fd(const uv_stream_t* handle) {
   const uv__stream_select_t* s;
 
   assert(handle->type == UV_TCP ||
+         handle->type == UV_UDT ||
          handle->type == UV_TTY ||
          handle->type == UV_NAMED_PIPE);
 
@@ -1614,13 +1902,30 @@ void uv__stream_close(uv_stream_t* handle) {
 
   if (handle->io_watcher.fd != -1) {
     /* Don't close stdio file descriptors.  Nothing good comes from it. */
-    if (handle->io_watcher.fd > STDERR_FILENO)
-      uv__close(handle->io_watcher.fd);
+      if (handle->io_watcher.fd > STDERR_FILENO){
+        if (handle->type == UV_UDT) {
+            // clear pending Os fd event
+            udt_consume_osfd(handle->io_watcher.fd);
+            
+            udt_close(((uv_udt_t *)handle)->udtfd);
+        } else {
+            uv__close(handle->io_watcher.fd);
+        }
+      }
+      
     handle->io_watcher.fd = -1;
   }
 
   if (handle->accepted_fd != -1) {
-    uv__close(handle->accepted_fd);
+      if (handle->type == UV_UDT) {
+          // clear pending Os fd event
+          udt_consume_osfd(handle->accepted_fd);
+          
+          udt_close(((uv_udt_t *)handle)->accepted_udtfd);
+      } else {
+          uv__close(handle->accepted_fd);
+      }
+    //uv__close(handle->accepted_fd);
     handle->accepted_fd = -1;
   }
 
