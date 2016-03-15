@@ -15,7 +15,10 @@
 ACLOCAL_AMFLAGS = -I m4
 
 AM_CPPFLAGS = -I$(top_srcdir)/include \
-              -I$(top_srcdir)/src
+              -I$(top_srcdir)/src \
+              -I$(top_srcdir)/src/UDT4/src \
+              -I$(top_srcdir)/src/nacl \
+              -DEVPIPE_OSFD
 
 include_HEADERS=include/uv.h include/uv-errno.h include/uv-threadpool.h include/uv-version.h
 
@@ -31,7 +34,25 @@ libuv_la_SOURCES = src/fs-poll.c \
                    src/threadpool.c \
                    src/uv-common.c \
                    src/uv-common.h \
-                   src/version.c
+                   src/version.c \
+                   \
+                   src/UDT4/src/api.cpp \
+                   src/UDT4/src/buffer.cpp \
+                   src/UDT4/src/cache.cpp \
+                   src/UDT4/src/ccc.cpp \
+                   src/UDT4/src/channel.cpp \
+                   src/UDT4/src/common.cpp \
+                   src/UDT4/src/udt_core.cpp \
+                   src/UDT4/src/epoll.cpp \
+                   src/UDT4/src/list.cpp \
+                   src/UDT4/src/md5.cpp \
+                   src/UDT4/src/packet.cpp \
+                   src/UDT4/src/queue.cpp \
+                   src/UDT4/src/udtc.cpp \
+                   src/UDT4/src/window.cpp \
+                   \
+                   src/nacl/tweetnacl.c
+
 
 if SUNOS
 # Can't be turned into a CC_CHECK_CFLAGS in configure.ac, it makes compilers
