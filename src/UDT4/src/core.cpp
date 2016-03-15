@@ -1150,9 +1150,14 @@ POST_CONNECT:
 
 #ifdef EVPIPE_OSFD
    // trigger event pipe
-   ///printf("%s.%s.%d, trigger Connected...", __FILE__, __FUNCTION__, __LINE__);
+#ifdef UDT_DEBUG
+   printf("%s.%s.%d, trigger Connected...", __FILE__, __FUNCTION__, __LINE__);
+#endif
    feedOsfd();
-   ///printf("done\n");
+#ifdef UDT_DEBUG
+   printf("done\n");
+#endif
+    
 #endif
 
    return 0;
@@ -1378,9 +1383,9 @@ void CUDT::close()
 #ifndef EVPIPE_OSFD
    // waiting all send and recv calls to stop
    ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
-   CGuard sendguard(m_SendLock);
+   //CGuard sendguard(m_SendLock);
    ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
-   CGuard recvguard(m_RecvLock);
+   //CGuard recvguard(m_RecvLock);
    ///printf("%s.%s.%d\n", __FILE__, __FUNCTION__, __LINE__);
 #endif
 
@@ -2245,9 +2250,14 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
 
 #ifdef EVPIPE_OSFD
          // trigger event pipe
-         ///printf("%s.%s.%d, trigger Sent...", __FILE__, __FUNCTION__, __LINE__);
+#ifdef UDT_DEBUG
+         printf("%s.%s.%d, trigger Sent...", __FILE__, __FUNCTION__, __LINE__);
+#endif
          feedOsfd();
-         ///printf("done\n");
+#ifdef UDT_DEBUG
+         printf("done\n");
+#endif
+          
 #endif
       }
       else if (ack == m_iRcvLastAck)
@@ -2592,9 +2602,14 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
 
 #ifdef EVPIPE_OSFD
       // trigger event pipe
-      ///printf("%s.%s.%d, trigger Ack...", __FILE__, __FUNCTION__, __LINE__);
+#ifdef UDT_DEBUG
+      printf("%s.%s.%d, trigger Ack...", __FILE__, __FUNCTION__, __LINE__);
+#endif
       feedOsfd();
-      ///printf("done\n");
+#ifdef UDT_DEBUG
+      printf("done\n");
+#endif
+          
 #endif
 
       // Update RTT
@@ -3084,9 +3099,14 @@ int CUDT::listen(sockaddr* addr, CPacket& packet)
 
 #ifdef EVPIPE_OSFD
             // trigger event pipe
-            ///printf("%s.%s.%d, trigger Listened...", __FILE__, __FUNCTION__, __LINE__);
+#ifdef UDT_DEBUG
+            printf("%s.%s.%d, CUDT::listen trigger Listened...", __FILE__, __FUNCTION__, __LINE__);
+#endif
             feedOsfd();
-            ///printf("done\n");
+#ifdef UDT_DEBUG
+            printf("done\n");
+#endif
+             
 #endif
          }
       }

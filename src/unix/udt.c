@@ -472,11 +472,9 @@ static int uv__connect(uv_connect_t* req,
 
   handle->delayed_error = 0;
 
-#if 1
   r = udt_connect(((uv_udt_t *)handle)->udtfd, addr, addrlen);
 
-  ///if (r < 0)
-  {
+  if (r < 0) {
 	  // checking connecting state first
 	  if (UDT_CONNECTING == udt_getsockstate(((uv_udt_t *)handle)->udtfd)) {
 		  ; //not an error
@@ -495,24 +493,6 @@ static int uv__connect(uv_connect_t* req,
 		  }
 	  }
   }
-#else
-  do
-	  r = connect(handle->fd, addr, addrlen);
-  while (r == -1 && errno == EINTR);
-
-  if (r == -1) {
-	  if (errno == EINPROGRESS)
-		  ; //not an error
-	  else if (errno == ECONNREFUSED)
-		  //If we get a ECONNREFUSED wait until the next tick to report the
-		   //error. Solaris wants to report immediately--other unixes want to
-		   //wait.
-		   //
-		  handle->delayed_error = errno;
-	  else
-		  return uv__set_sys_error(handle->loop, errno);
-  }
-#endif
 
   uv__req_init(handle->loop, req, UV_CONNECT);
   req->cb = cb;

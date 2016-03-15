@@ -1150,11 +1150,11 @@ POST_CONNECT:
 
 #ifdef EVPIPE_OSFD
    // trigger event pipe
-#ifdef DEBUG
+#ifdef UDT_DEBUG
    printf("%s.%s.%d, trigger Connected...", __FILE__, __FUNCTION__, __LINE__);
 #endif
    feedOsfd();
-#ifdef DEBUG
+#ifdef UDT_DEBUG
    printf("done\n");
 #endif
     
@@ -2250,11 +2250,11 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
 
 #ifdef EVPIPE_OSFD
          // trigger event pipe
-#ifdef DEBUG
+#ifdef UDT_DEBUG
          printf("%s.%s.%d, trigger Sent...", __FILE__, __FUNCTION__, __LINE__);
 #endif
          feedOsfd();
-#ifdef DEBUG
+#ifdef UDT_DEBUG
          printf("done\n");
 #endif
           
@@ -2602,11 +2602,11 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
 
 #ifdef EVPIPE_OSFD
       // trigger event pipe
-#ifdef DEBUG
+#ifdef UDT_DEBUG
       printf("%s.%s.%d, trigger Ack...", __FILE__, __FUNCTION__, __LINE__);
 #endif
       feedOsfd();
-#ifdef DEBUG
+#ifdef UDT_DEBUG
       printf("done\n");
 #endif
           
@@ -3099,11 +3099,11 @@ int CUDT::listen(sockaddr* addr, CPacket& packet)
 
 #ifdef EVPIPE_OSFD
             // trigger event pipe
-#ifdef DEBUG
+#ifdef UDT_DEBUG
             printf("%s.%s.%d, CUDT::listen trigger Listened...", __FILE__, __FUNCTION__, __LINE__);
 #endif
             feedOsfd();
-#ifdef DEBUG
+#ifdef UDT_DEBUG
             printf("done\n");
 #endif
              

@@ -853,11 +853,11 @@ void CRendezvousQueue::updateConnStatus()
 
 #ifdef EVPIPE_OSFD
             // trigger event pipe
-#ifdef DEBUG
+#ifdef UDT_DEBUG
              printf("%s.%s.%d, trigger Listened...", __FILE__, __FUNCTION__, __LINE__);
 #endif
              i->m_pUDT->feedOsfd();
-#ifdef DEBUG
+#ifdef UDT_DEBUG
              printf("done\n");
 #endif
              
