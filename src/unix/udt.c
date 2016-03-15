@@ -188,7 +188,8 @@ static int maybe_new_socket(uv_udt_t* handle, int domain, int flags) {
     
     
     // fill Osfd
-    assert(udt_getsockopt(handle->udtfd, 0, (int)UDT_UDT_OSFD, &handle->io_watcher.fd, &optlen) == 0);
+    int error = udt_getsockopt(handle->udtfd, 0, (int)UDT_UDT_OSFD, &handle->io_watcher.fd, &optlen);
+    assert(error == 0);
     
     err = uv__stream_open((uv_stream_t*)handle, handle->io_watcher.fd, flags);
     if (err) {

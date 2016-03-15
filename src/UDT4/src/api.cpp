@@ -492,10 +492,16 @@ int CUDTUnited::newConnection(const UDTSOCKET listen, const sockaddr* peer, CHan
 #ifdef EVPIPE_OSFD
    // trigger event pipe
 
+#ifdef DEBUG
+    printf("%s.%s.%d, CUDT::listen trigger Listened...", __FILE__, __FUNCTION__, __LINE__);
+#endif
     
-    ///printf("%s.%s.%d, CUDT::listen trigger Listened...", __FILE__, __FUNCTION__, __LINE__);
    ls->m_pUDT->feedOsfd();
-    ///printf("done\n");
+    
+#ifdef DEBUG
+    printf("done\n");
+#endif
+    
 #endif
 
 ERR_ROLLBACK:

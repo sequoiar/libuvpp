@@ -586,7 +586,8 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
           } else {
               ((uv_udt_t *)stream)->accepted_udtfd = udtfd;
               // fill Os fd
-              assert(udt_getsockopt(udtfd, 0, (int)UDT_UDT_OSFD, &stream->accepted_fd, &optlen) == 0);
+              int err = udt_getsockopt(udtfd, 0, (int)UDT_UDT_OSFD, &stream->accepted_fd, &optlen);
+              assert(err == 0);
               
               stream->connection_cb((uv_stream_t*)stream, 0);
               if (stream->accepted_fd >= 0) {
