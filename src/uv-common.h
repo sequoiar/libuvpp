@@ -82,6 +82,17 @@ int uv__tcp_connect(uv_connect_t* req,
                    unsigned int addrlen,
                    uv_connect_cb cb);
 
+int uv__udt_bind(uv_udt_t* udt,
+                 const struct sockaddr* addr,
+                 unsigned int addrlen,
+                 unsigned int flags);
+
+int uv__udt_connect(uv_connect_t* req,
+                   uv_udt_t* handle,
+                   const struct sockaddr* addr,
+                   unsigned int addrlen,
+                   uv_connect_cb cb);
+
 int uv__udp_bind(uv_udp_t* handle,
                  const struct sockaddr* addr,
                  unsigned int  addrlen,

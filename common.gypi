@@ -43,7 +43,8 @@
         ]
       },
       'Release': {
-        'defines': [ 'NDEBUG' ],
+        ### comment NDEBUG,that get release build crash. TBD...rootcause
+        ###'defines': [ 'NDEBUG' ],
         'cflags': [
           '-O3',
           '-fstrict-aliasing',
