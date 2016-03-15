@@ -65,7 +65,7 @@
         'src/threadpool.c',
         'src/uv-common.c',
         'src/uv-common.h',
-        'src/version.c'
+        'src/version.c',
         'src/UDT4/src/api.cpp',
         'src/UDT4/src/buffer.cpp',
         'src/UDT4/src/cache.cpp',
