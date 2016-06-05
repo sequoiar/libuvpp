@@ -1004,6 +1004,9 @@ void CUDT::connect(const sockaddr* serv_addr)
 
       if (CTimer::getTime() > ttl)
       {
+      	 // Stop waiting for this connection
+      	 m_pRcvQueue->removeConnector(m_SocketID);
+
          // timeout
          e = CUDTException(1, 1, 0);
          break;
